@@ -35,5 +35,5 @@ typedef struct {
 		int64_t  i64;
 		double   f64;
 	} as;
-} token;
+} Token;
 

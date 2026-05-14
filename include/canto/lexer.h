@@ -1,4 +1,5 @@
 #include "common.h"
+#include "token.h"
 
 typedef struct {
 	uint32_t* offsets;
@@ -13,5 +14,24 @@ typedef struct {
 	LineMap line;
 } SourceMap;
 
-void initSourceMap(SourceMap* map, const char* file_path, const char* buffer);
+typedef struct {
+	uint32_t* syms;
+	uint32_t count;
+	uint32_t capacity;
+} SymEntry;
+
+typedef struct {
+	SourceMap map;
+	SymEntry sym_entry;
+	Token* tokens;
+	uint32_t tk_count;
+	uint32_t tk_capacity;
+
+	const char* start;
+	const char* current;
+	uint32_t line;
+} Lexer;
+
+void init_lexer(Lexer* lexer, const char* file_path, const char* buffer);
+void run_lex(Lexer* lexer);
 
