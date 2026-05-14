@@ -1,9 +1,9 @@
 #include<string.h>
 #include "canto/lexer.h"
 
-void init_lexer(Lexer* lexer, const char* file_path, const char* buffer) {
+void init_lexer(Lexer* lexer, const char* buffer, const char* file_path) {
     // Initialize SourceMap
-    lexer->map.file_path = file_path;
+    lexer->map.file_path = file_path ? file_path : "<repl>";
     lexer->map.source_buffer = buffer;
     lexer->map.source_length = (uint32_t)strlen(buffer);
     lexer->map.line.count = 0;
