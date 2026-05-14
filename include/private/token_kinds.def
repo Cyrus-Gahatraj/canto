@@ -1,0 +1,77 @@
+/*
+*
+* Macros:
+*	TK(name, text)			: puncation / structural
+*	TK_KW(name, text)		: reserve keyword
+*	TK_LIT(name, text)		: literal variant
+*	TK_TRIVIA(name, text)	: whitespace / comments
+*
+*/
+
+/* Structural */
+TK(LEX_EOF,		NULL)
+TK(LEX_ERROR,	NULL)
+
+/* Puncuation */
+TK(LPAREN,    "(" )
+TK(RPAREN,    ")" )
+TK(LBRACE,    "{" )
+TK(RBRACE,    "}" )
+TK(LBRACKET,  "[" )
+TK(RBRACKET,  "]" )
+TK(DOT,       "." )
+TK(DOT_DOT,   ".." )
+TK(COMMA,     "," )
+TK(COLON,     ":" )
+TK(BANG,      "!" )
+TK(TILDE,     "~" )
+
+/* Trivia */
+TK_TRIVIA(WHITESPACE,    NULL)
+TK_TRIVIA(NEWLINE,       NULL)
+TK_TRIVIA(LINE_COMMENT,   "~")
+TK_TRIVIA(BLOCK_COMMENT, "~~")
+
+/* Literal */
+TK_LIT(INT_LIT,			NULL)
+TK_LIT(FLOAT_LIT,		NULL)
+TK_LIT(STRING_LIT,		NULL)
+TK_LIT(CHAR_LIT,		NULL)
+TK_LIT(BYTE_LIT,		NULL)
+TK_LIT(BOOL_LIT,		NULL)
+TK_LIT(OPTIONAL_LIT,    NULL)
+
+/* Identifier */
+TK(IDENT,		NULL)
+
+/* Operator */
+TK(PLUS,       "+" )
+TK(MINUS,      "-" )
+TK(STAR,       "*" )
+TK(PERCENTAGE, "%" )
+TK(SLASH,      "/" )
+TK(EQUAL,      "=" )
+TK(GEQ,        ">=")
+TK(LEQ,        "<=")
+TK(GT,         ">" )
+TK(LT,         "<" )
+
+/* Keywords (TK_KW) */
+TK_KW(LET,       "let")
+TK_KW(DESIGN,    "design")
+TK_KW(IF,        "if")
+TK_KW(OR,        "or") 
+TK_KW(ELSE,      "else")
+TK_KW(WHEN,      "when") 
+TK_KW(RECURSE,   "recurse")
+TK_KW(CONTINUE,  "continue")
+TK_KW(RETURN,    "return")
+TK_KW(ERROR,     "error")
+TK_KW(TRY,       "try")
+TK_KW(OPTIONAL,  "optional")
+TK_KW(TRUE,      "true")
+TK_KW(FALSE,     "false")
+TK_KW(EDIT,      "edit")
+TK_KW(GET,       "get")
+TK_KW(USER_KIND, NULL)
+
