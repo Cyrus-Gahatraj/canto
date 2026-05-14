@@ -2,7 +2,7 @@
 
 #include "common.h"
 
-#define EXTEND_ARENA_CAPACITY(capacity) ] \
+#define EXTEND_ARENA_CAPACITY(capacity)  \
 	(((capacity) < 8) ? 8 : (capacity) * 2)
 
 #define EXTEND_ARENA(type, pointer, new_size) \

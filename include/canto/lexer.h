@@ -15,14 +15,19 @@ typedef struct {
 } SourceMap;
 
 typedef struct {
-	uint32_t* syms;
-	uint32_t count;
-	uint32_t capacity;
-} SymEntry;
+    const char* start;
+    uint32_t length;
+} Symbol;
+
+typedef struct {
+    Symbol* syms;
+    uint32_t count;
+    uint32_t capacity;
+} SymTable;
 
 typedef struct {
 	SourceMap map;
-	SymEntry sym_entry;
+	SymTable symbols;
 	Token* tokens;
 	uint32_t tk_count;
 	uint32_t tk_capacity;

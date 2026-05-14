@@ -1,3 +1,4 @@
+#pragma once
 #include "common.h"
 
 typedef enum {
@@ -24,12 +25,12 @@ enum TokenFlags_ {
 typedef struct {
 	uint32_t start;
 	uint32_t length;
-} span;
+} Span;
 
 typedef struct {
 	TokenKind  kind;
 	TokenFlags flags;
-	span span;
+	Span span;
 	uint32_t sym;
 	union {
 		int64_t  i64;
