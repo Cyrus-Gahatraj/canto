@@ -50,6 +50,19 @@ void init_lexer(Lexer* lexer, const char* buffer, const char* file_path) {
     lexer->line = 1;
 }
 
+static Token create_token(Lexer* lexer, TokenKind kind, TokenFlags flag) {
+	Token tk;
+	tk.kind = kind;
+	tk.flags = flag;
+	uint32_t offset = (uint32_t)(lexer->start - lexer->map.source_buffer);
+	uint32_t length = (uint32_t) (lexer->current - lexer->start);
+	tk.span = (Span) { .start = offset, .length = length };
+	Symbol symbol = { .start = lexer->start, .length = length };
+	tk.sym = append_symbol(lexer, symbol);
+
+	return tk;
+}
+
 static bool at_end(Lexer* lexer) {
 	return *lexer->current == '\0';
 }
@@ -59,8 +72,20 @@ static char advance(Lexer* lexer) {
 	return lexer->current[-1];
 }
 
+static void advance_newline(Lexer* lexer) {
+	Token tk;
+	tk = create_token(lexer, TK_NEWLINE, TOKEN_FLAG_NONE);
+	append_token(lexer, tk);
+	advance(lexer);
+	lexer->line++;
+}
+
 static bool is_digit(char c) {
 	return (c >= '0' && c <= '9');
+}
+
+static bool is_trivia(char c) {
+	return (c == ' ' || c == '\n' || c == '\t' || c == '~');
 }
 
 static char peek(Lexer* lexer) {
@@ -70,6 +95,43 @@ static char peek(Lexer* lexer) {
 static char peek_next(Lexer* lexer) {
 	if (at_end(lexer)) return '\0';
 	return lexer->current[1];
+}
+
+static void trivia(Lexer* lexer) {
+	for(;;){
+		char c = peek(lexer);
+		Token tk;
+		switch (c) {
+			case ' ':
+			case '\r':
+			case '\t':
+				tk = create_token(lexer, TK_WHITESPACE, TOKEN_FLAG_NONE);
+				append_token(lexer, tk);
+				advance(lexer);
+				break;
+			case '\n': advance_newline(lexer); break;
+			case '~':
+				if (peek_next(lexer) == '~') {
+					//multiline comment
+					advance(lexer); advance(lexer);
+
+					while (!at_end(lexer)) {
+						if (peek(lexer) == '~' && peek_next(lexer) == '~'){
+							advance(lexer); advance(lexer);
+							break;
+						}
+						if (peek(lexer) == '\n') advance_newline(lexer);
+					}
+				}
+				else {
+					while(!at_end(lexer) && peek(lexer) != '\n') {
+						advance(lexer);	
+					}
+					if (peek(lexer) == '\n') advance_newline(lexer);
+				}
+			default: return;
+		}
+	}
 }
 
 static void number(Lexer* lexer) {
@@ -83,27 +145,12 @@ static void number(Lexer* lexer) {
 	}
 
 	Token tk;
-
-	uint32_t offset = (uint32_t)(lexer->start - lexer->map.source_buffer);
-	uint32_t length = (uint32_t) (lexer->current - lexer->start);
-	Symbol symbol = { .start = lexer->start, .length = length };
-
 	if (is_double) {
-		tk = (Token) {
-			.flags = TOKEN_FLAG_NONE,
-			.sym = append_symbol(lexer, symbol),
-			.kind = TK_DOUBLE_LIT,
-			.span = (Span) { .start = offset, .length = length },
-			.as = {strtod(lexer->start, NULL)}, 
-		};	
+		tk = create_token(lexer, TK_DOUBLE_LIT, TOKEN_FLAG_NONE);
+		tk.as.f64 =  strtod(lexer->start, NULL);
 	} else{
-		tk = (Token) {
-			.flags = TOKEN_FLAG_NONE,
-			.sym = append_symbol(lexer, symbol),
-			.kind = TK_INT_LIT,
-			.span = (Span) { .start = offset, .length = length },
-			.as = {strtoll(lexer->start, NULL, 10)},
-		};
+		tk = create_token(lexer, TK_INT_LIT, TOKEN_FLAG_NONE);
+		tk.as.i64 = strtoll(lexer->start, NULL, 10);
 	}
 
 	append_token(lexer, tk);
@@ -114,10 +161,12 @@ void run_lex(Lexer* lexer){
 	while (!at_end(lexer)) {
 
 		lexer->start = lexer->current;
-
-		char c = advance(lexer);
+		char c = peek(lexer);
+		if (is_trivia(c)) trivia(lexer); 
 		if (is_digit(c)) number(lexer); 
 	}
-	
+
+	Token eof = create_token(lexer, TK_LEX_EOF, TOKEN_FLAG_NONE); 
+	append_token(lexer, eof);
 }
 
