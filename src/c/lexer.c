@@ -1,7 +1,9 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "canto/lexer.h"
 #include "canto/memory.h"
+#include "canto/token.h"
 
 static void append_token(Lexer* lexer, Token token) {
 	if (lexer->tk_capacity < lexer->tk_count + 1){
@@ -11,7 +13,6 @@ static void append_token(Lexer* lexer, Token token) {
 	
 	lexer->tokens[lexer->tk_count++] = token;
 }
-
 
 static uint32_t append_symbol(Lexer* lexer, Symbol symbol) {
 	if (lexer->symbols.capacity < lexer->symbols.count + 1){
@@ -50,16 +51,40 @@ void init_lexer(Lexer* lexer, const char* buffer, const char* file_path) {
     lexer->line = 1;
 }
 
-static Token create_token(Lexer* lexer, TokenKind kind, TokenFlags flag) {
+inline static uint32_t get_token_offset(Lexer* lexer) {
+	return (uint32_t)(lexer->start - lexer->map.source_buffer);
+}
+
+inline static uint32_t get_token_length(Lexer* lexer) {
+	return (uint32_t)(lexer->current - lexer->start);
+}
+
+static Span get_span(Lexer* lexer) {
+	uint32_t offset = get_token_offset(lexer);
+	uint32_t length = get_token_length(lexer);
+	Span span = (Span) { .start = offset, .length = length };
+	return span;
+}
+
+static Token create_token(Lexer* lexer, TokenKind kind, TokenFlags flags) {
 	Token tk;
 	tk.kind = kind;
-	tk.flags = flag;
-	uint32_t offset = (uint32_t)(lexer->start - lexer->map.source_buffer);
-	uint32_t length = (uint32_t) (lexer->current - lexer->start);
-	tk.span = (Span) { .start = offset, .length = length };
+	tk.flags = flags;
+	tk.span = get_span(lexer);
+	uint32_t length = get_token_length(lexer);
 	Symbol symbol = { .start = lexer->start, .length = length };
 	tk.sym = append_symbol(lexer, symbol);
 
+	return tk;
+}
+
+static Token error_token(Lexer* lexer, const char* message) {
+	Token tk;
+	tk.kind = TK_LEX_ERROR;
+	tk.flags = TOKEN_FLAG_NONE;
+	tk.span = get_span(lexer);
+	Symbol sym = (Symbol){ .start = message, .length = strlen(message)};
+	append_symbol(lexer, sym);
 	return tk;
 }
 
@@ -156,6 +181,26 @@ static void number(Lexer* lexer) {
 	append_token(lexer, tk);
 }
 
+static void string(Lexer* lexer) {
+	advance(lexer);
+    while (!at_end(lexer)) {
+        char c = peek(lexer);
+        
+        if (c == '"') {
+            advance(lexer);
+            append_token(lexer, create_token(lexer, TK_STRING_LIT, TOKEN_FLAG_NONE));
+            return;
+        }
+
+        if (c == '\n') {
+            lexer->line++;
+        }
+        advance(lexer);
+    }
+
+    append_token(lexer, error_token(lexer, "Unterminated string."));
+}
+
 void run_lex(Lexer* lexer){
 	
 	while (!at_end(lexer)) {
@@ -164,6 +209,10 @@ void run_lex(Lexer* lexer){
 		char c = peek(lexer);
 		if (is_trivia(c)) trivia(lexer); 
 		if (is_digit(c)) number(lexer); 
+
+		switch (c) {
+			case '"': string(lexer);
+		}
 	}
 
 	Token eof = create_token(lexer, TK_LEX_EOF, TOKEN_FLAG_NONE); 
