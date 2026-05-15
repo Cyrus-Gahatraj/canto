@@ -4,6 +4,9 @@
 #include "canto/lexer.h"
 #include "canto/memory.h"
 #include "canto/token.h"
+#include "internal/keyword_lookup.c"
+
+typedef const struct keyword* keyword;
 
 static void append_token(Lexer* lexer, Token token) {
 	if (lexer->tk_capacity < lexer->tk_count + 1){
@@ -105,6 +108,12 @@ static void advance_newline(Lexer* lexer) {
 	lexer->line++;
 }
 
+static bool is_alpha(char c) {
+	return (c >= 'a' && c <= 'z') ||
+		   (c >= 'A' && c <= 'Z') ||
+		   (c == '_');
+}
+
 static bool is_digit(char c) {
 	return (c >= '0' && c <= '9');
 }
@@ -120,6 +129,13 @@ static char peek(Lexer* lexer) {
 static char peek_next(Lexer* lexer) {
 	if (at_end(lexer)) return '\0';
 	return lexer->current[1];
+}
+
+static bool match(Lexer* lexer, char expected) {
+    if (at_end(lexer)) return false;
+    if (*lexer->current != expected) return false;
+    lexer->current++; 
+    return true;
 }
 
 static void trivia(Lexer* lexer) {
@@ -157,6 +173,21 @@ static void trivia(Lexer* lexer) {
 			default: return;
 		}
 	}
+}
+
+static void identifier(Lexer* lexer) {
+	while (is_alpha(peek(lexer)) || is_digit(peek(lexer))) {
+		advance(lexer);
+	}
+
+	uint32_t length = get_token_length(lexer);
+	keyword kw = lookup_keyword(lexer->start, length);
+
+	TokenKind kind;
+	if (kw != NULL) kind = (TokenKind) kw->token;
+	else kind = TK_IDENT;
+
+	append_token(lexer, create_token(lexer, kind, TOKEN_FLAG_NONE));
 }
 
 static void number(Lexer* lexer) {
@@ -201,21 +232,77 @@ static void string(Lexer* lexer) {
     append_token(lexer, error_token(lexer, "Unterminated string."));
 }
 
-void run_lex(Lexer* lexer){
+void run_lex(Lexer* lexer) {
+    while (!at_end(lexer)) {
+        lexer->start = lexer->current;
+        char c = advance(lexer);
+
+        // Handle identifiers/keywords
+        if (is_alpha(c)) {
+            identifier(lexer);
+            continue;
+        }
+
+        // Handle numbers
+        if (is_digit(c)) {
+            number(lexer);
+            continue;
+        }
+
+        // Handle Trivia (Whitespace/Comments)
+        if (is_trivia(c)) {
+            trivia(lexer);
+            continue;
+        }
+
+        switch (c) {
+            // Single characters
+            case '=': append_token(lexer, create_token(lexer, TK_EQUAL, TOKEN_FLAG_NONE)); break;
+            case '(': append_token(lexer, create_token(lexer, TK_LPAREN, TOKEN_FLAG_NONE)); break;
+            case ')': append_token(lexer, create_token(lexer, TK_RPAREN, TOKEN_FLAG_NONE)); break;
+            case '{': append_token(lexer, create_token(lexer, TK_LBRACE, TOKEN_FLAG_NONE)); break;
+            case '}': append_token(lexer, create_token(lexer, TK_RBRACE, TOKEN_FLAG_NONE)); break;
+            case '[': append_token(lexer, create_token(lexer, TK_LBRACKET, TOKEN_FLAG_NONE)); break;
+            case ']': append_token(lexer, create_token(lexer, TK_RBRACKET, TOKEN_FLAG_NONE)); break;
+            case ';': append_token(lexer, create_token(lexer, TK_SEMICOLON, TOKEN_FLAG_NONE)); break;
+            case ',': append_token(lexer, create_token(lexer, TK_COMMA, TOKEN_FLAG_NONE)); break;
+            case '.': append_token(lexer, create_token(lexer, TK_DOT, TOKEN_FLAG_NONE)); break;
+            case ':': append_token(lexer, create_token(lexer, TK_COLON, TOKEN_FLAG_NONE)); break;
+            case '+': append_token(lexer, create_token(lexer, TK_PLUS, TOKEN_FLAG_NONE)); break;
+            case '-': append_token(lexer, create_token(lexer, TK_MINUS, TOKEN_FLAG_NONE)); break;
+            case '*': append_token(lexer, create_token(lexer, TK_STAR, TOKEN_FLAG_NONE)); break;
+            case '/': append_token(lexer, create_token(lexer, TK_SLASH, TOKEN_FLAG_NONE)); break;
+            case '%': append_token(lexer, create_token(lexer, TK_PERCENTAGE, TOKEN_FLAG_NONE)); break;
+            case '"': string(lexer); break;
+
+            // Two-character operators
+            case '!':
+                append_token(lexer, create_token(lexer, match(lexer, '=') ? TK_NOT_EQUAL : TK_BANG, TOKEN_FLAG_JOINT));
+                break;
+            case '<':
+                append_token(lexer, create_token(lexer, match(lexer, '=') ? TK_LEQ : TK_LT, TOKEN_FLAG_JOINT));
+                break;
+            case '>':
+                append_token(lexer, create_token(lexer, match(lexer, '=') ? TK_GEQ : TK_GT, TOKEN_FLAG_JOINT));
+                break;
+
+            // Logical And/Or
+            case '&':
+                if (match(lexer, '&')) {
+                    append_token(lexer, create_token(lexer, TK_BOOL_AND, TOKEN_FLAG_JOINT));
+                }
+                break;
+            case '|':
+                if (match(lexer, '|')) {
+                    append_token(lexer, create_token(lexer, TK_BOOL_OR, TOKEN_FLAG_JOINT));
+                }
+                break;
+
+            default:
+                break;
+        }
+    }
 	
-	while (!at_end(lexer)) {
-
-		lexer->start = lexer->current;
-		char c = peek(lexer);
-		if (is_trivia(c)) trivia(lexer); 
-		if (is_digit(c)) number(lexer); 
-
-		switch (c) {
-			case '"': string(lexer);
-		}
-	}
-
-	Token eof = create_token(lexer, TK_LEX_EOF, TOKEN_FLAG_NONE); 
-	append_token(lexer, eof);
+    lexer->start = lexer->current;
+    append_token(lexer, create_token(lexer, TK_LEX_EOF, TOKEN_FLAG_NONE));
 }
-

@@ -6,7 +6,7 @@ typedef enum {
 #define TK_KW(name, text)		TK_KW_##name,
 #define TK_LIT(name, text)		TK_##name,
 #define TK_TRIVIA(name, text)	TK_##name,
-#include "../private/token_kinds.def" 
+#include "private/token_kinds.def" 
 #undef TK
 #undef TK_KW
 #undef TK_LIT

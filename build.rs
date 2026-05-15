@@ -6,21 +6,18 @@ fn main() {
     let gperf_output = "src/internal/keyword_lookup.c";
 
     if Path::new(gperf_input).exists() {
-        let status = Command::new("gperf")
+        Command::new("gperf")
             .arg("--output-file")
             .arg(gperf_output)
-            .arg("-L")
-            .arg("ANSI-C") // modern function prototypes
-            .arg("-t")     // Includes  struct definition
-            .arg("-C")     // Makes the lookup tables 'const' (better for performance)
-            .arg("-N")
-            .arg("lookup_keyword")
+            .arg("-L").arg("ANSI-C")
+            .arg("-t")
+            .arg("-C")
+            .arg("-N").arg("lookup_keyword")
+            .arg("-c")
             .arg(gperf_input)
-            .output()
+            .status()
             .expect("Failed to execute gperf");
-
-        std::fs::write(gperf_output, status.stdout)
-            .expect("Failed to write generated lookup code.");
+        
     }
     println!("cargo:rerun-if-change={}", gperf_input);
 
