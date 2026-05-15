@@ -3,7 +3,7 @@
 
 typedef enum {
 #define TK(name, text)			TK_##name,
-#define TK_KW(name, text)		TK_##name,
+#define TK_KW(name, text)		TK_KW_##name,
 #define TK_LIT(name, text)		TK_##name,
 #define TK_TRIVIA(name, text)	TK_##name,
 #include "../private/token_kinds.def" 

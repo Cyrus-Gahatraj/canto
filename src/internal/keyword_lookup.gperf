@@ -1,0 +1,28 @@
+%{
+#include "canto/token.h"
+#include <string.h>
+%}
+
+struct keyword {
+    char* name;
+    int token;
+};
+
+%%
+let,        TK_KW_LET
+design,     TK_KW_DESIGN
+if,         TK_KW_IF
+or,         TK_KW_OR
+else,       TK_KW_ELSE
+when,       TK_KW_WHEN
+recurse,    TK_KW_RECURSE
+continue,   TK_KW_CONTINUE
+return,     TK_KW_RETURN
+error,      TK_KW_ERROR
+try,        TK_KW_TRY
+optional,   TK_KW_OPTIONAL
+true,       TK_KW_TRUE
+false,      TK_KW_FALSE
+edit,       TK_KW_EDIT
+get,        TK_KW_GET
+%%

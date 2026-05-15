@@ -25,6 +25,7 @@ TK(COMMA,     "," )
 TK(COLON,     ":" )
 TK(BANG,      "!" )
 TK(TILDE,     "~" )
+TK(SEMICOLON, ";" )
 
 /* Trivia */
 TK_TRIVIA(WHITESPACE,    NULL)
@@ -51,10 +52,13 @@ TK(STAR,       "*" )
 TK(PERCENTAGE, "%" )
 TK(SLASH,      "/" )
 TK(EQUAL,      "=" )
+TK(NOT_EQUAL,  "!=" )
 TK(GEQ,        ">=")
 TK(LEQ,        "<=")
 TK(GT,         ">" )
 TK(LT,         "<" )
+TK(BOOL_AND,   "&&")
+TK(BOOL_OR,    "||")
 
 /* Keywords (TK_KW) */
 TK_KW(LET,       "let")
