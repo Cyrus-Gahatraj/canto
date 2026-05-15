@@ -61,6 +61,7 @@ TK(BOOL_AND,   "&&")
 TK(BOOL_OR,    "||")
 
 /* Keywords (TK_KW) */
+TK_KW(BEING, NULL)
 TK_KW(LET,       "let")
 TK_KW(DESIGN,    "design")
 TK_KW(IF,        "if")
@@ -78,4 +79,5 @@ TK_KW(FALSE,     "false")
 TK_KW(EDIT,      "edit")
 TK_KW(GET,       "get")
 TK_KW(USER_KIND, NULL)
+TK_KW(END, NULL)
 

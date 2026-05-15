@@ -69,14 +69,22 @@ static Span get_span(Lexer* lexer) {
 	return span;
 }
 
+static bool tk_is_kw(TokenKind kind) {
+	return (kind > TK_KW_BEING && kind < TK_KW_END);
+}
+
 static Token create_token(Lexer* lexer, TokenKind kind, TokenFlags flags) {
 	Token tk;
 	tk.kind = kind;
 	tk.flags = flags;
 	tk.span = get_span(lexer);
-	uint32_t length = get_token_length(lexer);
-	Symbol symbol = { .start = lexer->start, .length = length };
-	tk.sym = append_symbol(lexer, symbol);
+	tk.sym = 0;
+
+	// Only push if identifiers, keyword or literal
+	if (kind == TK_IDENT || tk_is_kw(kind) || kind == TK_STRING_LIT) {
+		Symbol symbol = (Symbol) { .start = lexer->start, .length = get_token_length(lexer)};
+		tk.sym = append_symbol(lexer, symbol);
+	}
 
 	return tk;
 }
@@ -101,10 +109,10 @@ static char advance(Lexer* lexer) {
 }
 
 static void advance_newline(Lexer* lexer) {
-	Token tk;
-	tk = create_token(lexer, TK_NEWLINE, TOKEN_FLAG_NONE);
-	append_token(lexer, tk);
+	lexer->start = lexer->current;
 	advance(lexer);
+	Token tk = create_token(lexer, TK_NEWLINE, TOKEN_FLAG_NONE);
+	append_token(lexer, tk);
 	lexer->line++;
 }
 
@@ -170,6 +178,7 @@ static void trivia(Lexer* lexer) {
 					}
 					if (peek(lexer) == '\n') advance_newline(lexer);
 				}
+				break;
 			default: return;
 		}
 	}
@@ -214,12 +223,18 @@ static void number(Lexer* lexer) {
 
 static void string(Lexer* lexer) {
 	advance(lexer);
+	TokenFlags flags = TOKEN_FLAG_NONE;
+
     while (!at_end(lexer)) {
         char c = peek(lexer);
-        
+    
+		if (c == '{') flags |= TOKEN_FLAG_INTERPOLATE;
         if (c == '"') {
             advance(lexer);
-            append_token(lexer, create_token(lexer, TK_STRING_LIT, TOKEN_FLAG_NONE));
+			Token tk = create_token(lexer, TK_STRING_LIT, TOKEN_FLAG_NONE);
+			Symbol symbol = { .start = lexer->start, .length = get_token_length(lexer)};
+			tk.sym = append_symbol(lexer, symbol);
+            append_token(lexer, tk);
             return;
         }
 
@@ -235,44 +250,47 @@ static void string(Lexer* lexer) {
 void run_lex(Lexer* lexer) {
     while (!at_end(lexer)) {
         lexer->start = lexer->current;
-        char c = advance(lexer);
+        char c = peek(lexer);
 
         // Handle identifiers/keywords
         if (is_alpha(c)) {
+			advance(lexer);
             identifier(lexer);
             continue;
         }
 
         // Handle numbers
         if (is_digit(c)) {
+			advance(lexer);
             number(lexer);
             continue;
         }
 
         // Handle Trivia (Whitespace/Comments)
         if (is_trivia(c)) {
+			advance(lexer);
             trivia(lexer);
             continue;
         }
 
         switch (c) {
             // Single characters
-            case '=': append_token(lexer, create_token(lexer, TK_EQUAL, TOKEN_FLAG_NONE)); break;
-            case '(': append_token(lexer, create_token(lexer, TK_LPAREN, TOKEN_FLAG_NONE)); break;
-            case ')': append_token(lexer, create_token(lexer, TK_RPAREN, TOKEN_FLAG_NONE)); break;
-            case '{': append_token(lexer, create_token(lexer, TK_LBRACE, TOKEN_FLAG_NONE)); break;
-            case '}': append_token(lexer, create_token(lexer, TK_RBRACE, TOKEN_FLAG_NONE)); break;
-            case '[': append_token(lexer, create_token(lexer, TK_LBRACKET, TOKEN_FLAG_NONE)); break;
-            case ']': append_token(lexer, create_token(lexer, TK_RBRACKET, TOKEN_FLAG_NONE)); break;
-            case ';': append_token(lexer, create_token(lexer, TK_SEMICOLON, TOKEN_FLAG_NONE)); break;
-            case ',': append_token(lexer, create_token(lexer, TK_COMMA, TOKEN_FLAG_NONE)); break;
-            case '.': append_token(lexer, create_token(lexer, TK_DOT, TOKEN_FLAG_NONE)); break;
-            case ':': append_token(lexer, create_token(lexer, TK_COLON, TOKEN_FLAG_NONE)); break;
-            case '+': append_token(lexer, create_token(lexer, TK_PLUS, TOKEN_FLAG_NONE)); break;
-            case '-': append_token(lexer, create_token(lexer, TK_MINUS, TOKEN_FLAG_NONE)); break;
-            case '*': append_token(lexer, create_token(lexer, TK_STAR, TOKEN_FLAG_NONE)); break;
-            case '/': append_token(lexer, create_token(lexer, TK_SLASH, TOKEN_FLAG_NONE)); break;
-            case '%': append_token(lexer, create_token(lexer, TK_PERCENTAGE, TOKEN_FLAG_NONE)); break;
+            case '=': advance(lexer); append_token(lexer, create_token(lexer, TK_EQUAL, TOKEN_FLAG_NONE)); break;
+            case '(': advance(lexer); append_token(lexer, create_token(lexer, TK_LPAREN, TOKEN_FLAG_NONE)); break;
+            case ')': advance(lexer); append_token(lexer, create_token(lexer, TK_RPAREN, TOKEN_FLAG_NONE)); break;
+            case '{': advance(lexer); append_token(lexer, create_token(lexer, TK_LBRACE, TOKEN_FLAG_NONE)); break;
+            case '}': advance(lexer); append_token(lexer, create_token(lexer, TK_RBRACE, TOKEN_FLAG_NONE)); break;
+            case '[': advance(lexer); append_token(lexer, create_token(lexer, TK_LBRACKET, TOKEN_FLAG_NONE)); break;
+            case ']': advance(lexer); append_token(lexer, create_token(lexer, TK_RBRACKET, TOKEN_FLAG_NONE)); break;
+            case ';': advance(lexer); append_token(lexer, create_token(lexer, TK_SEMICOLON, TOKEN_FLAG_NONE)); break;
+            case ',': advance(lexer); append_token(lexer, create_token(lexer, TK_COMMA, TOKEN_FLAG_NONE)); break;
+            case '.': advance(lexer); append_token(lexer, create_token(lexer, TK_DOT, TOKEN_FLAG_NONE)); break;
+            case ':': advance(lexer); append_token(lexer, create_token(lexer, TK_COLON, TOKEN_FLAG_NONE)); break;
+            case '+': advance(lexer); append_token(lexer, create_token(lexer, TK_PLUS, TOKEN_FLAG_NONE)); break;
+            case '-': advance(lexer); append_token(lexer, create_token(lexer, TK_MINUS, TOKEN_FLAG_NONE)); break;
+            case '*': advance(lexer); append_token(lexer, create_token(lexer, TK_STAR, TOKEN_FLAG_NONE)); break;
+            case '/': advance(lexer); append_token(lexer, create_token(lexer, TK_SLASH, TOKEN_FLAG_NONE)); break;
+            case '%': advance(lexer); append_token(lexer, create_token(lexer, TK_PERCENTAGE, TOKEN_FLAG_NONE)); break;
             case '"': string(lexer); break;
 
             // Two-character operators

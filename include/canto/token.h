@@ -20,6 +20,7 @@ enum TokenFlags_ {
     TOKEN_FLAG_START_OF_LINE  = 1 << 0,  // first token on this line
     TOKEN_FLAG_LEADING_SPACE  = 1 << 1,  // whitespace/trivia preceded this
     TOKEN_FLAG_JOINT          = 1 << 2,  // no space between this and next
+    TOKEN_FLAG_INTERPOLATE    = 1 << 3,  // no space between this and next
 };
 
 typedef struct {
