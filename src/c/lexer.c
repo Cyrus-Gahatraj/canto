@@ -3,6 +3,7 @@
 #include <string.h>
 #include "canto/lexer.h"
 #include "canto/memory.h"
+#include "canto/symtable.h"
 #include "canto/token.h"
 #include "internal/keyword_lookup.c"
 
@@ -17,18 +18,6 @@ static void append_token(Lexer* lexer, Token token) {
 	lexer->tokens[lexer->tk_count++] = token;
 }
 
-static uint32_t append_symbol(Lexer* lexer, Symbol symbol) {
-	if (lexer->symbols.capacity < lexer->symbols.count + 1){
-		lexer->symbols.capacity = EXTEND_ARENA_CAPACITY(lexer->symbols.capacity);
-		lexer->symbols.syms = EXTEND_ARENA(Symbol, lexer->symbols.syms, lexer->symbols.capacity);
-	}
-	
-	uint32_t index = lexer->symbols.count;
-	lexer->symbols.syms[index] = symbol;
-	lexer->symbols.count++;
-	return index;
-}
-
 void init_lexer(Lexer* lexer, const char* buffer, const char* file_path) {
     // Initialize SourceMap
     lexer->map.file_path = file_path ? file_path : "<repl>";
@@ -39,9 +28,7 @@ void init_lexer(Lexer* lexer, const char* buffer, const char* file_path) {
     lexer->map.line.offsets = NULL;
 
     // Initialize SymEntry
-    lexer->symbols.count = 0;
-    lexer->symbols.capacity = 0;
-    lexer->symbols.syms = NULL;
+	symtable_init(&lexer->symbols);
 
     // Setup Token Stream
     lexer->tk_count = 0;
@@ -83,7 +70,7 @@ static Token create_token(Lexer* lexer, TokenKind kind, TokenFlags flags) {
 	// Only push if identifiers, keyword or literal
 	if (kind == TK_IDENT || tk_is_kw(kind) || kind == TK_STRING_LIT) {
 		Symbol symbol = (Symbol) { .start = lexer->start, .length = get_token_length(lexer)};
-		tk.sym = append_symbol(lexer, symbol);
+		tk.sym = intern_symbol(&lexer->symbols, &symbol);
 	}
 
 	return tk;
@@ -94,8 +81,8 @@ static Token error_token(Lexer* lexer, const char* message) {
 	tk.kind = TK_LEX_ERROR;
 	tk.flags = TOKEN_FLAG_NONE;
 	tk.span = get_span(lexer);
-	Symbol sym = (Symbol){ .start = message, .length = strlen(message)};
-	append_symbol(lexer, sym);
+	Symbol symbol = (Symbol){ .start = message, .length = strlen(message)};
+	intern_symbol(&lexer->symbols, &symbol);
 	return tk;
 }
 
@@ -233,7 +220,7 @@ static void string(Lexer* lexer) {
             advance(lexer);
 			Token tk = create_token(lexer, TK_STRING_LIT, TOKEN_FLAG_NONE);
 			Symbol symbol = { .start = lexer->start, .length = get_token_length(lexer)};
-			tk.sym = append_symbol(lexer, symbol);
+			tk.sym = intern_symbol(&lexer->symbols, &symbol);
             append_token(lexer, tk);
             return;
         }

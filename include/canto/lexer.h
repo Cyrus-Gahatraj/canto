@@ -1,5 +1,8 @@
+#pragma once
+
 #include "common.h"
 #include "token.h"
+#include "symtable.h"
 
 typedef struct {
 	uint32_t* offsets;
@@ -13,17 +16,6 @@ typedef struct {
 	uint32_t source_length;
 	LineMap line;
 } SourceMap;
-
-typedef struct {
-    const char* start;
-    uint32_t length;
-} Symbol;
-
-typedef struct {
-    Symbol* syms;
-    uint32_t count;
-    uint32_t capacity;
-} SymTable;
 
 typedef struct {
 	SourceMap map;

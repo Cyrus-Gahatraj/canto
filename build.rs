@@ -13,7 +13,7 @@ fn main() {
             .arg("-t")
             .arg("-C")
             .arg("-N").arg("lookup_keyword")
-            .arg("-c")
+            .arg("-E")
             .arg(gperf_input)
             .status()
             .expect("Failed to execute gperf");
@@ -28,6 +28,7 @@ fn main() {
         .file("src/c/memory.c") 
         .file("src/c/lexer.c") 
         .file("src/c/compiler.c") 
+        .file("src/c/symtable.c") 
         .warnings(true)
         .compile("canto");
 
