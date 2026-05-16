@@ -57,7 +57,7 @@ static Span get_span(Lexer* lexer) {
 }
 
 static bool tk_is_kw(TokenKind kind) {
-	return (kind > TK_KW_BEING && kind < TK_KW_END);
+	return (kind > TK_KW_BEGINNING && kind < TK_KW_ENDING);
 }
 
 static Token create_token(Lexer* lexer, TokenKind kind, TokenFlags flags) {
@@ -241,7 +241,6 @@ void run_lex(Lexer* lexer) {
 
         // Handle identifiers/keywords
         if (is_alpha(c)) {
-			advance(lexer);
             identifier(lexer);
             continue;
         }

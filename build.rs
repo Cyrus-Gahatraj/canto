@@ -12,6 +12,7 @@ fn main() {
             .arg("-L").arg("ANSI-C")
             .arg("-t")
             .arg("-C")
+            .arg("-c")
             .arg("-N").arg("lookup_keyword")
             .arg("-E")
             .arg(gperf_input)
