@@ -3,8 +3,6 @@
 #include <string.h>
 #include "canto/lexer.h"
 #include "canto/memory.h"
-#include "canto/symtable.h"
-#include "canto/token.h"
 #include "internal/keyword_lookup.c"
 
 typedef const struct keyword* keyword;
@@ -18,15 +16,10 @@ static void append_token(Lexer* lexer, Token token) {
 	lexer->tokens[lexer->tk_count++] = token;
 }
 
-void init_lexer(Lexer* lexer, const char* buffer, const char* file_path) {
+void init_lexer(Lexer* lexer, const SourceMap* map) {
     // Initialize SourceMap
-    lexer->map.file_path = file_path ? file_path : "<repl>";
-    lexer->map.source_buffer = buffer;
-    lexer->map.source_length = (uint32_t)strlen(buffer);
-    lexer->map.line.count = 0;
-    lexer->map.line.capacity = 0;
-    lexer->map.line.offsets = NULL;
-
+	lexer->map = map;
+	
     // Initialize SymEntry
 	symtable_init(&lexer->symbols);
 
@@ -36,24 +29,9 @@ void init_lexer(Lexer* lexer, const char* buffer, const char* file_path) {
     lexer->tokens = NULL;
 
     // Setup Scanning Pointers
-    lexer->start = buffer;
-    lexer->current = buffer;
+    lexer->start = map->source_buffer;
+    lexer->current = map->source_buffer;
     lexer->line = 1;
-}
-
-inline static uint32_t get_token_offset(Lexer* lexer) {
-	return (uint32_t)(lexer->start - lexer->map.source_buffer);
-}
-
-inline static uint32_t get_token_length(Lexer* lexer) {
-	return (uint32_t)(lexer->current - lexer->start);
-}
-
-static Span get_span(Lexer* lexer) {
-	uint32_t offset = get_token_offset(lexer);
-	uint32_t length = get_token_length(lexer);
-	Span span = (Span) { .start = offset, .length = length };
-	return span;
 }
 
 static bool tk_is_kw(TokenKind kind) {
@@ -64,25 +42,29 @@ static Token create_token(Lexer* lexer, TokenKind kind, TokenFlags flags) {
 	Token tk;
 	tk.kind = kind;
 	tk.flags = flags;
-	tk.span = get_span(lexer);
 	tk.sym = 0;
+	tk.span = get_span(lexer->map->source_buffer, lexer->start, lexer->current);
 
 	// Only push if identifiers, keyword or literal
 	if (kind == TK_IDENT || tk_is_kw(kind) || kind == TK_STRING_LIT) {
-		Symbol symbol = (Symbol) { .start = lexer->start, .length = get_token_length(lexer)};
+		uint32_t length = get_token_length(lexer->start, lexer->current);
+		Symbol symbol = (Symbol) { .start = lexer->start, .length = length};
 		tk.sym = intern_symbol(&lexer->symbols, &symbol);
 	}
 
 	return tk;
 }
 
-static Token error_token(Lexer* lexer, const char* message) {
+static Token error_token(Lexer* lexer, DiagEngine* diags, const char* message) {
 	Token tk;
 	tk.kind = TK_LEX_ERROR;
 	tk.flags = TOKEN_FLAG_NONE;
-	tk.span = get_span(lexer);
-	Symbol symbol = (Symbol){ .start = message, .length = strlen(message)};
-	intern_symbol(&lexer->symbols, &symbol);
+	tk.span = get_span(lexer->map->source_buffer, lexer->start, lexer->current);
+
+	append_diag(diags, message, tk.span, DIAG_PHASE_LEX, DIAG_ERROR);
+
+	Symbol symbol = (Symbol){ .start = message, .length = strlen(message), .kind = SYM_VARIABLE};
+	tk.sym = intern_symbol(&lexer->symbols, &symbol);
 	return tk;
 }
 
@@ -176,7 +158,7 @@ static void identifier(Lexer* lexer) {
 		advance(lexer);
 	}
 
-	uint32_t length = get_token_length(lexer);
+	uint32_t length = get_token_length(lexer->start, lexer->current);
 	keyword kw = lookup_keyword(lexer->start, length);
 
 	TokenKind kind;
@@ -208,7 +190,7 @@ static void number(Lexer* lexer) {
 	append_token(lexer, tk);
 }
 
-static void string(Lexer* lexer) {
+static void string(Lexer* lexer, DiagEngine* diags) {
 	advance(lexer);
 	TokenFlags flags = TOKEN_FLAG_NONE;
 
@@ -219,7 +201,8 @@ static void string(Lexer* lexer) {
         if (c == '"') {
             advance(lexer);
 			Token tk = create_token(lexer, TK_STRING_LIT, TOKEN_FLAG_NONE);
-			Symbol symbol = { .start = lexer->start, .length = get_token_length(lexer)};
+			uint32_t length = get_token_length(lexer->start, lexer->current);
+			Symbol symbol = { .start = lexer->start, .length = length };
 			tk.sym = intern_symbol(&lexer->symbols, &symbol);
             append_token(lexer, tk);
             return;
@@ -231,10 +214,10 @@ static void string(Lexer* lexer) {
         advance(lexer);
     }
 
-    append_token(lexer, error_token(lexer, "Unterminated string."));
+    append_token(lexer, error_token(lexer, diags, "Unterminated string."));
 }
 
-void run_lex(Lexer* lexer) {
+void run_lex(Lexer* lexer, DiagEngine* diags) {
     while (!at_end(lexer)) {
         lexer->start = lexer->current;
         char c = peek(lexer);
@@ -277,7 +260,7 @@ void run_lex(Lexer* lexer) {
             case '*': advance(lexer); append_token(lexer, create_token(lexer, TK_STAR, TOKEN_FLAG_NONE)); break;
             case '/': advance(lexer); append_token(lexer, create_token(lexer, TK_SLASH, TOKEN_FLAG_NONE)); break;
             case '%': advance(lexer); append_token(lexer, create_token(lexer, TK_PERCENTAGE, TOKEN_FLAG_NONE)); break;
-            case '"': string(lexer); break;
+            case '"': string(lexer, diags); break;
 
             // Two-character operators
             case '!':
@@ -303,6 +286,9 @@ void run_lex(Lexer* lexer) {
                 break;
 
             default:
+				advance(lexer);
+				Token err_tk = error_token(lexer, diags, "Unexpected character sequence.");
+				append_token(lexer, err_tk);
                 break;
         }
     }

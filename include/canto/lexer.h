@@ -1,24 +1,13 @@
 #pragma once
 
+#include "diagnostic.h"
+#include "source_map.h"
 #include "common.h"
 #include "token.h"
 #include "symtable.h"
 
 typedef struct {
-	uint32_t* offsets;
-	uint32_t count;
-	uint32_t capacity;
-} LineMap;
-
-typedef struct {
-	const char* file_path;
-	const char* source_buffer;
-	uint32_t source_length;
-	LineMap line;
-} SourceMap;
-
-typedef struct {
-	SourceMap map;
+	const SourceMap* map;
 	SymTable symbols;
 	Token* tokens;
 	uint32_t tk_count;
@@ -29,6 +18,6 @@ typedef struct {
 	uint32_t line;
 } Lexer;
 
-void init_lexer(Lexer* lexer, const char* file_path, const char* buffer);
-void run_lex(Lexer* lexer);
+void init_lexer(Lexer* lexer, const SourceMap* map);
+void run_lex(Lexer* lexer, DiagEngine* engine);
 

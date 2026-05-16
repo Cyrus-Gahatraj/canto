@@ -30,6 +30,9 @@ fn main() {
         .file("src/c/lexer.c") 
         .file("src/c/compiler.c") 
         .file("src/c/symtable.c") 
+        .file("src/c/diagnostic.c") 
+        .file("src/c/span.c") 
+        .file("src/c/source_map.c") 
         .warnings(true)
         .compile("canto");
 

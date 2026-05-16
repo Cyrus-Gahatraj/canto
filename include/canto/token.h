@@ -1,5 +1,7 @@
 #pragma once
+
 #include "common.h"
+#include "span.h"
 
 typedef enum {
 #define TK(name, text)			TK_##name,
@@ -22,12 +24,7 @@ enum TokenFlags_ {
     TOKEN_FLAG_JOINT          = 1 << 2,  // no space between this and next
     TOKEN_FLAG_INTERPOLATE    = 1 << 3,  // no space between this and next
 };
-
-typedef struct {
-	uint32_t start;
-	uint32_t length;
-} Span;
-
+ 
 typedef struct {
 	TokenKind  kind;
 	TokenFlags flags;
