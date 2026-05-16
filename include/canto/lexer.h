@@ -7,7 +7,7 @@
 #include "symtable.h"
 
 typedef struct {
-	const SourceMap* map;
+	SourceMap* map;
 	SymTable symbols;
 	Token* tokens;
 	uint32_t tk_count;
@@ -18,6 +18,6 @@ typedef struct {
 	uint32_t line;
 } Lexer;
 
-void init_lexer(Lexer* lexer, const SourceMap* map);
+void init_lexer(Lexer* lexer, SourceMap* map);
 void run_lex(Lexer* lexer, DiagEngine* engine);
 

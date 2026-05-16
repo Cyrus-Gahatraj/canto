@@ -16,9 +16,10 @@ static void append_token(Lexer* lexer, Token token) {
 	lexer->tokens[lexer->tk_count++] = token;
 }
 
-void init_lexer(Lexer* lexer, const SourceMap* map) {
+void init_lexer(Lexer* lexer, SourceMap* map) {
     // Initialize SourceMap
 	lexer->map = map;
+	source_map_add_line(lexer->map, 0);
 	
     // Initialize SymEntry
 	symtable_init(&lexer->symbols);
@@ -77,9 +78,15 @@ static char advance(Lexer* lexer) {
 	return lexer->current[-1];
 }
 
+static void add_newline_offset(Lexer* lexer) {
+	uint32_t next_line_offset = (uint32_t) (lexer->current - lexer->map->source_buffer);
+	source_map_add_line(lexer->map, next_line_offset);
+}
+
 static void advance_newline(Lexer* lexer) {
 	lexer->start = lexer->current;
 	advance(lexer);
+	add_newline_offset(lexer);
 	Token tk = create_token(lexer, TK_NEWLINE, TOKEN_FLAG_NONE);
 	append_token(lexer, tk);
 	lexer->line++;
@@ -191,6 +198,8 @@ static void number(Lexer* lexer) {
 }
 
 static void string(Lexer* lexer, DiagEngine* diags) {
+	const char* string_start = lexer->start;
+
 	advance(lexer);
 	TokenFlags flags = TOKEN_FLAG_NONE;
 
@@ -209,10 +218,14 @@ static void string(Lexer* lexer, DiagEngine* diags) {
         }
 
         if (c == '\n') {
+			advance(lexer);
+			add_newline_offset(lexer);
             lexer->line++;
         }
         advance(lexer);
     }
+
+	lexer->start = string_start;
 
     append_token(lexer, error_token(lexer, diags, "Unterminated string."));
 }

@@ -16,5 +16,6 @@ typedef struct {
 } SourceMap;
 
 void init_source_map(SourceMap* map, const char* file_path, const char* buffer);
+void source_map_add_line(SourceMap* map, uint32_t offset);
 void free_source_map(SourceMap* map);
 

@@ -2,6 +2,9 @@
 
 #include "span.h"
 #include "source_map.h"
+#include "canto/common.h"
+
+#define DIAG_MAX 50
 
 typedef enum {
 	DIAG_INFO,
@@ -30,11 +33,13 @@ typedef struct {
 	uint32_t capacity;
 	uint32_t error_count;
 	uint32_t warning_count;
+	uint32_t suppressed;
 } DiagEngine;
 
 void diag_init(DiagEngine* diags);
 void append_diag(DiagEngine* diags, const char* message, Span span,
-				DiagPhase phase, DiagSeverity severity);
+				DiagPhase phase, DiagSeverity sev);
 void diag_free(DiagEngine* diags);
 void diag_render_report(DiagEngine* diags, const SourceMap* map);
+bool diag_has_errors(const DiagEngine *diags);
 
