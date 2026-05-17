@@ -33,6 +33,8 @@ fn main() {
         .file("src/c/diagnostic.c") 
         .file("src/c/span.c") 
         .file("src/c/source_map.c") 
+        .file("src/c/parser.c") 
+        .file("src/c/arena.c") 
         .warnings(true)
         .compile("canto");
 

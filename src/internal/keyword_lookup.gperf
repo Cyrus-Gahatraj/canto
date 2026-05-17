@@ -22,6 +22,7 @@ continue,   TK_KW_CONTINUE
 return,     TK_KW_RETURN
 error,      TK_KW_ERROR
 try,        TK_KW_TRY
+type,		TK_KW_TYPE
 optional,   TK_KW_OPTIONAL
 true,       TK_KW_TRUE
 false,      TK_KW_FALSE

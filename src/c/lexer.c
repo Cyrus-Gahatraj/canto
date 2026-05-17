@@ -73,7 +73,7 @@ static bool at_end(Lexer* lexer) {
 	return *lexer->current == '\0';
 }
 
-static char advance(Lexer* lexer) {
+static char next(Lexer* lexer) {
 	lexer->current++;
 	return lexer->current[-1];
 }
@@ -85,7 +85,7 @@ static void add_newline_offset(Lexer* lexer) {
 
 static void advance_newline(Lexer* lexer) {
 	lexer->start = lexer->current;
-	advance(lexer);
+	next(lexer);
 	add_newline_offset(lexer);
 	Token tk = create_token(lexer, TK_NEWLINE, TOKEN_FLAG_NONE);
 	append_token(lexer, tk);
@@ -132,17 +132,17 @@ static void trivia(Lexer* lexer) {
 			case '\t':
 				tk = create_token(lexer, TK_WHITESPACE, TOKEN_FLAG_NONE);
 				append_token(lexer, tk);
-				advance(lexer);
+				next(lexer);
 				break;
 			case '\n': advance_newline(lexer); break;
 			case '~':
 				if (peek_next(lexer) == '~') {
 					//multiline comment
-					advance(lexer); advance(lexer);
+					next(lexer); next(lexer);
 
 					while (!at_end(lexer)) {
 						if (peek(lexer) == '~' && peek_next(lexer) == '~'){
-							advance(lexer); advance(lexer);
+							next(lexer); next(lexer);
 							break;
 						}
 						if (peek(lexer) == '\n') advance_newline(lexer);
@@ -150,7 +150,7 @@ static void trivia(Lexer* lexer) {
 				}
 				else {
 					while(!at_end(lexer) && peek(lexer) != '\n') {
-						advance(lexer);	
+						next(lexer);	
 					}
 					if (peek(lexer) == '\n') advance_newline(lexer);
 				}
@@ -162,7 +162,7 @@ static void trivia(Lexer* lexer) {
 
 static void identifier(Lexer* lexer) {
 	while (is_alpha(peek(lexer)) || is_digit(peek(lexer))) {
-		advance(lexer);
+		next(lexer);
 	}
 
 	uint32_t length = get_token_length(lexer->start, lexer->current);
@@ -176,13 +176,13 @@ static void identifier(Lexer* lexer) {
 }
 
 static void number(Lexer* lexer) {
-	while (is_digit(peek(lexer))) advance(lexer);
+	while (is_digit(peek(lexer))) next(lexer);
 
 	bool is_double = false;
 	if (peek(lexer) == '.' && is_digit(peek_next(lexer))) {
 		is_double = true;
-		advance(lexer);	
-		while (is_digit(peek(lexer))) advance(lexer);
+		next(lexer);	
+		while (is_digit(peek(lexer))) next(lexer);
 	}
 
 	Token tk;
@@ -200,7 +200,7 @@ static void number(Lexer* lexer) {
 static void string(Lexer* lexer, DiagEngine* diags) {
 	const char* string_start = lexer->start;
 
-	advance(lexer);
+	next(lexer);
 	TokenFlags flags = TOKEN_FLAG_NONE;
 
     while (!at_end(lexer)) {
@@ -208,7 +208,7 @@ static void string(Lexer* lexer, DiagEngine* diags) {
     
 		if (c == '{') flags |= TOKEN_FLAG_INTERPOLATE;
         if (c == '"') {
-            advance(lexer);
+            next(lexer);
 			Token tk = create_token(lexer, TK_STRING_LIT, TOKEN_FLAG_NONE);
 			uint32_t length = get_token_length(lexer->start, lexer->current);
 			Symbol symbol = { .start = lexer->start, .length = length };
@@ -218,11 +218,11 @@ static void string(Lexer* lexer, DiagEngine* diags) {
         }
 
         if (c == '\n') {
-			advance(lexer);
+			next(lexer);
 			add_newline_offset(lexer);
             lexer->line++;
         }
-        advance(lexer);
+        next(lexer);
     }
 
 	lexer->start = string_start;
@@ -230,82 +230,90 @@ static void string(Lexer* lexer, DiagEngine* diags) {
     append_token(lexer, error_token(lexer, diags, "Unterminated string."));
 }
 
-void run_lex(Lexer* lexer, DiagEngine* diags) {
+void run_lex(Lexer *lexer, DiagEngine *diags) {
     while (!at_end(lexer)) {
         lexer->start = lexer->current;
         char c = peek(lexer);
 
-        // Handle identifiers/keywords
-        if (is_alpha(c)) {
-            identifier(lexer);
-            continue;
-        }
-
-        // Handle numbers
-        if (is_digit(c)) {
-			advance(lexer);
-            number(lexer);
-            continue;
-        }
-
-        // Handle Trivia (Whitespace/Comments)
-        if (is_trivia(c)) {
-			advance(lexer);
-            trivia(lexer);
-            continue;
-        }
+        if (is_alpha(c)) { identifier(lexer); continue; }
+        if (is_digit(c)) { next(lexer); number(lexer); continue; }
+        if (is_trivia(c)) { next(lexer); trivia(lexer); continue; }
 
         switch (c) {
-            // Single characters
-            case '=': advance(lexer); append_token(lexer, create_token(lexer, TK_EQUAL, TOKEN_FLAG_NONE)); break;
-            case '(': advance(lexer); append_token(lexer, create_token(lexer, TK_LPAREN, TOKEN_FLAG_NONE)); break;
-            case ')': advance(lexer); append_token(lexer, create_token(lexer, TK_RPAREN, TOKEN_FLAG_NONE)); break;
-            case '{': advance(lexer); append_token(lexer, create_token(lexer, TK_LBRACE, TOKEN_FLAG_NONE)); break;
-            case '}': advance(lexer); append_token(lexer, create_token(lexer, TK_RBRACE, TOKEN_FLAG_NONE)); break;
-            case '[': advance(lexer); append_token(lexer, create_token(lexer, TK_LBRACKET, TOKEN_FLAG_NONE)); break;
-            case ']': advance(lexer); append_token(lexer, create_token(lexer, TK_RBRACKET, TOKEN_FLAG_NONE)); break;
-            case ';': advance(lexer); append_token(lexer, create_token(lexer, TK_SEMICOLON, TOKEN_FLAG_NONE)); break;
-            case ',': advance(lexer); append_token(lexer, create_token(lexer, TK_COMMA, TOKEN_FLAG_NONE)); break;
-            case '.': advance(lexer); append_token(lexer, create_token(lexer, TK_DOT, TOKEN_FLAG_NONE)); break;
-            case ':': advance(lexer); append_token(lexer, create_token(lexer, TK_COLON, TOKEN_FLAG_NONE)); break;
-            case '+': advance(lexer); append_token(lexer, create_token(lexer, TK_PLUS, TOKEN_FLAG_NONE)); break;
-            case '-': advance(lexer); append_token(lexer, create_token(lexer, TK_MINUS, TOKEN_FLAG_NONE)); break;
-            case '*': advance(lexer); append_token(lexer, create_token(lexer, TK_STAR, TOKEN_FLAG_NONE)); break;
-            case '/': advance(lexer); append_token(lexer, create_token(lexer, TK_SLASH, TOKEN_FLAG_NONE)); break;
-            case '%': advance(lexer); append_token(lexer, create_token(lexer, TK_PERCENTAGE, TOKEN_FLAG_NONE)); break;
+            case '=': next(lexer); append_token(lexer, create_token(lexer, TK_EQUAL,     TOKEN_FLAG_NONE)); break;
+            case '(': next(lexer); append_token(lexer, create_token(lexer, TK_LPAREN,    TOKEN_FLAG_NONE)); break;
+            case ')': next(lexer); append_token(lexer, create_token(lexer, TK_RPAREN,    TOKEN_FLAG_NONE)); break;
+            case '{': next(lexer); append_token(lexer, create_token(lexer, TK_LBRACE,    TOKEN_FLAG_NONE)); break;
+            case '}': next(lexer); append_token(lexer, create_token(lexer, TK_RBRACE,    TOKEN_FLAG_NONE)); break;
+            case '[': next(lexer); append_token(lexer, create_token(lexer, TK_LBRACKET,  TOKEN_FLAG_NONE)); break;
+            case ']': next(lexer); append_token(lexer, create_token(lexer, TK_RBRACKET,  TOKEN_FLAG_NONE)); break;
+            case ';': next(lexer); append_token(lexer, create_token(lexer, TK_SEMICOLON, TOKEN_FLAG_NONE)); break;
+            case ',': next(lexer); append_token(lexer, create_token(lexer, TK_COMMA,     TOKEN_FLAG_NONE)); break;
+            case ':': next(lexer); append_token(lexer, create_token(lexer, TK_COLON,     TOKEN_FLAG_NONE)); break;
+            case '+': next(lexer); append_token(lexer, create_token(lexer, TK_PLUS,      TOKEN_FLAG_NONE)); break;
+            case '-': next(lexer); append_token(lexer, create_token(lexer, TK_MINUS,     TOKEN_FLAG_NONE)); break;
+            case '*': next(lexer); append_token(lexer, create_token(lexer, TK_STAR,      TOKEN_FLAG_NONE)); break;
+            case '/': next(lexer); append_token(lexer, create_token(lexer, TK_SLASH,     TOKEN_FLAG_NONE)); break;
+            case '%': next(lexer); append_token(lexer, create_token(lexer, TK_PERCENTAGE,TOKEN_FLAG_NONE)); break;
             case '"': string(lexer, diags); break;
 
-            // Two-character operators
+            /* two-character operators — next() FIRST, then match second char */
             case '!':
-                append_token(lexer, create_token(lexer, match(lexer, '=') ? TK_NOT_EQUAL : TK_BANG, TOKEN_FLAG_JOINT));
-                break;
-            case '<':
-                append_token(lexer, create_token(lexer, match(lexer, '=') ? TK_LEQ : TK_LT, TOKEN_FLAG_JOINT));
-                break;
-            case '>':
-                append_token(lexer, create_token(lexer, match(lexer, '=') ? TK_GEQ : TK_GT, TOKEN_FLAG_JOINT));
+                next(lexer);
+                append_token(lexer, create_token(lexer,
+                    match(lexer, '=') ? TK_NOT_EQUAL : TK_BANG,
+                    TOKEN_FLAG_NONE));
                 break;
 
-            // Logical And/Or
+            case '<':
+                next(lexer);
+                append_token(lexer, create_token(lexer,
+                    match(lexer, '=') ? TK_LEQ : TK_LT,
+                    TOKEN_FLAG_NONE));
+                break;
+
+            case '>':
+                next(lexer);
+                append_token(lexer, create_token(lexer,
+                    match(lexer, '=') ? TK_GEQ : TK_GT,
+                    TOKEN_FLAG_NONE));
+                break;
+
             case '&':
-                if (match(lexer, '&')) {
-                    append_token(lexer, create_token(lexer, TK_BOOL_AND, TOKEN_FLAG_JOINT));
+                next(lexer);
+                if (match(lexer, '&'))
+                    append_token(lexer, create_token(lexer, TK_BOOL_AND, TOKEN_FLAG_NONE));
+                else {
+                    Token err = error_token(lexer, diags, "unexpected '&', did you mean '&&'?");
+                    append_token(lexer, err);
                 }
                 break;
+
             case '|':
-                if (match(lexer, '|')) {
-                    append_token(lexer, create_token(lexer, TK_BOOL_OR, TOKEN_FLAG_JOINT));
+                next(lexer);
+                if (match(lexer, '|'))
+                    append_token(lexer, create_token(lexer, TK_BOOL_OR, TOKEN_FLAG_NONE));
+                else {
+                    Token err = error_token(lexer, diags, "unexpected '|', did you mean '||'?");
+                    append_token(lexer, err);
                 }
+                break;
+
+            case '.':
+                next(lexer);
+                if (match(lexer, '.'))
+                    append_token(lexer, create_token(lexer, TK_DOT_DOT, TOKEN_FLAG_NONE));
+                else
+                    append_token(lexer, create_token(lexer, TK_DOT, TOKEN_FLAG_NONE));
                 break;
 
             default:
-				advance(lexer);
-				Token err_tk = error_token(lexer, diags, "Unexpected character sequence.");
-				append_token(lexer, err_tk);
+                next(lexer);
+                append_token(lexer, error_token(lexer, diags, "unexpected character."));
                 break;
         }
     }
-	
+
     lexer->start = lexer->current;
     append_token(lexer, create_token(lexer, TK_LEX_EOF, TOKEN_FLAG_NONE));
 }
