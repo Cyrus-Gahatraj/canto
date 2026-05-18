@@ -37,7 +37,26 @@ fn main() {
         .file("src/c/arena.c") 
         .warnings(true)
         .compile("canto");
-
     println!("cargo:rustc-link-lib=static=canto");
+
+    let llvm_include = Command::new("llvm-config")
+        .arg("--includedir")
+        .output()
+        .expect("llvm-config not found");
+
+    let llvm_include =
+        String::from_utf8(llvm_include.stdout)
+            .unwrap()
+            .trim()
+            .to_string();
+
+    cc::Build::new()
+        .cpp(true)
+        .file("src/llvm/codegen.cpp")
+        .include("include")
+        .include(&llvm_include)
+        .flag("-std=c++20")
+        .compile("canto_codegen");
+
 }
 
