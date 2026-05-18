@@ -7,6 +7,7 @@
 #include "canto/lexer.h"
 #include "canto/parser.h"
 #include "canto/source_map.h"
+#include "canto/codegen.h"
 
 static void clean_up(Lexer* lexer, DiagEngine* diags) {
 	symtable_free(&lexer->symbols);
@@ -87,6 +88,8 @@ void compile(const char* source, const char* file_path){
 	}
 
 	init_parser(&parser, &diags, lexer.tokens, lexer.tk_count, &map);
+	codegen_init();
+	codegen_dump();
 	Node* tree = parse_expression(&parser);
 
 	print_ast(tree, 2);

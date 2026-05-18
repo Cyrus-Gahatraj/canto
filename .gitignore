@@ -3,3 +3,5 @@
 compile_commands.json
 src/internal/keyword_lookup.c
 
+build/
+

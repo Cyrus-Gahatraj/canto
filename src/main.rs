@@ -46,6 +46,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
     let engine = Engine::new();
 
+    std::fs::create_dir_all("build")?;
     match &cli.command {
         Some(Commands::Run { path }) => {
             let path: &Path = Path::new(path);
