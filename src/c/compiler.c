@@ -88,16 +88,27 @@ void compile(const char* source, const char* file_path){
 	}
 
 	init_parser(&parser, &diags, lexer.tokens, lexer.tk_count, &map);
-	codegen_init();
-	codegen_dump();
 	Node* tree = parse_expression(&parser);
+    print_ast(tree, 2);
 
-	print_ast(tree, 2);
+    codegen_init();
 
-	if (diag_has_errors(&diags))
+    if (!diag_has_errors(&diags) && tree != NULL) {
+        int llvm_val = codegen_eval_expr(tree);
+        
+        if (llvm_val == 0) {
+            printf("Codegen Success: Emitted Value %d\n", llvm_val);
+            printf("made a file in build/canto.ll\n");
+        } else 
+            printf("Codegen Warning: codegen_eval_expr returned NULL\n");
+    }
+    codegen_dump();
+
+    if (diag_has_errors(&diags))
         diag_render_report(&diags, &map);
 
-	free_parser(&parser);
-	clean_up(&lexer, &diags);
+    free_parser(&parser);
+    clean_up(&lexer, &diags);
+	exit(0);
 }
 
