@@ -109,6 +109,7 @@ void compile(const char* source, const char* file_path){
 
     free_parser(&parser);
     clean_up(&lexer, &diags);
+	codegen_free();	
 	exit(0);
 }
 
