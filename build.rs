@@ -22,7 +22,7 @@ fn main() {
             .expect("Failed to execute gperf");
         
     }
-    println!("cargo:rerun-if-change={}", gperf_input);
+    println!("cargo:rerun-if-changed={}", gperf_input);
     println!("cargo:rerun-if-changed=src/c/");
     println!("cargo:rerun-if-changed=src/llvm/");
 

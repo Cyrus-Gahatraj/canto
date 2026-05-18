@@ -1,0 +1,14 @@
+# docker
+Dockerfile
+.dockerignore
+
+# git
+.git/
+.gitignore/
+
+# outputs
+target/
+build/
+src/internal/keyword_lookup.c
+compile_commands.json
+
