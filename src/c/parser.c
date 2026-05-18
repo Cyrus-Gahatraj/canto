@@ -15,6 +15,7 @@ static Node* parse_unary(Parser* parser);
 static Node* parse_bool(Parser* parser);
 static Node* parse_binary(Parser* parser, Node* left);
 static Node* parse_grouping(Parser* parser);
+static Node* parse_let_declaration(Parser* parser);
 
 static const ParseRule global_rules[TK_COUNT] = {
 	// identifier
@@ -204,6 +205,69 @@ static Node* parse_binary(Parser* parser, Node* left) {
 	node->binary.op = op.kind;
 	node->binary.right = right;
 	return node;
+}
+
+static Node* parse_let_declaration(Parser* parser) {
+	Span start = current(parser)->span;
+	next(parser);
+	skip_trivia(parser);
+
+	Token ident_tk = expect_token(parser, TK_IDENT, "expected variable name after 'let'.");
+	Node* type_ann = NULL;
+
+	if (match(parser, TK_COLON)) {
+		Token type_tk = expect_token(parser, TK_IDENT, "expected type name after ':'.");
+		type_ann = make_node(parser, NODE_IDENT, type_tk.span);
+		type_ann->ident.sym = type_tk.sym;
+	}
+	skip_trivia(parser);
+	Node* value = parse_expression(parser);
+	
+	Node* node = make_node(parser, NODE_LET, start);
+	node->let.is_fn = false;
+	node->let.name_sym = ident_tk.sym;
+	node->let.type_ann = type_ann;
+	node->let.value = value;
+	
+	return node;
+}
+
+static Node* parse_stmt(Parser* parser) {
+    skip_trivia(parser);
+    switch (current(parser)->kind) {
+        case TK_KW_LET: return parse_let_declaration(parser);
+        case TK_LEX_EOF: return NULL;
+        default:         return parse_expression(parser);
+    }
+}
+
+Node* parse_program(Parser* parser) {
+    Node  **stmts = NULL;
+    uint32_t count = 0, cap = 0;
+
+    while (!check(parser, TK_LEX_EOF)) {
+        skip_trivia(parser);
+        if (check(parser, TK_LEX_EOF)) break;
+
+        Node *s = parse_stmt(parser);
+        if (!s) break;
+
+        if (count >= cap) {
+            cap   = cap ? cap * 2 : 8;
+            stmts = realloc(stmts, cap * sizeof(Node*));
+        }
+        stmts[count++] = s;
+
+        // consume statement terminator
+        skip_trivia(parser);
+        match(parser, TK_SEMICOLON);
+    }
+
+    Node *root = make_node(parser, NODE_PROGRAM,
+                           (Span){0, parser->map->source_length});
+    root->block.stmts = stmts;
+    root->block.count = count;
+    return root;
 }
 
 Node* parse_expression(Parser* parser) {

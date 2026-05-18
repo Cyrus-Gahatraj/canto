@@ -49,6 +49,6 @@ void init_parser(Parser* parser, DiagEngine* diags,
 				Token* tokens, uint32_t count, SourceMap* map);
 void free_parser(Parser* parser);
 
-Node* parse_program(Parser* parser, DiagEngine* diags);
+Node* parse_program(Parser* parser);
 Node* parse_expression(Parser* parser);
 

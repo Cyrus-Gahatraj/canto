@@ -9,20 +9,6 @@
 #include "canto/source_map.h"
 #include "canto/codegen.h"
 
-static void clean_up(Lexer* lexer, DiagEngine* diags) {
-	symtable_free(&lexer->symbols);
-    free(lexer->tokens);
-    diag_free(diags);
-}
-
-static void print_lex_info(Lexer* lexer) {
-	for (uint32_t i = 0; i < lexer->tk_count; ++i) {
-		Token* tk = &lexer->tokens[i];
-		printf("Token %d: Kind %d, Span [%d, %d]\n", 
-                i, tk->kind, tk->span.start, tk->span.length);
-	}
-}
-
 void print_ast(Node* node, int indent) {
     if (!node) {
         printf("%*s(NULL)\n", indent * 2, "");
@@ -64,6 +50,20 @@ void print_ast(Node* node, int indent) {
 			printf("BoolLit: %s\n", node->bool_lit.value ? "true" : "false");
 			break;
 
+		case NODE_LET:
+			printf("Let (sym=%u, has_type=%s):\n",
+				   node->let.name_sym,
+				   node->let.type_ann ? "yes" : "no");
+			if (node->let.type_ann) print_ast(node->let.type_ann, indent + 1);
+			print_ast(node->let.value, indent + 1);
+			break;
+
+		case NODE_PROGRAM:
+			printf("Program (%u stmts):\n", node->block.count);
+			for (uint32_t i = 0; i < node->block.count; i++)
+				print_ast(node->block.stmts[i], indent + 1);
+			break;
+
         default:
             printf("Unknown Node Kind: %d\n", node->kind);
             break;
@@ -76,40 +76,42 @@ void compile(const char* source, const char* file_path){
 	SourceMap map;
 	Parser parser;
 	
-	diag_init(&diags);
-	init_source_map(&map, file_path, source);
-	init_lexer(&lexer, &map);
-	run_lex(&lexer, &diags);	
+    diag_init(&diags);
+    init_source_map(&map, file_path, source);
+    init_lexer(&lexer, &map);
+    run_lex(&lexer, &diags);
 
-	if (diag_has_errors(&diags)) {
-		diag_render_report(&diags, &map);
-		clean_up(&lexer, &diags);
-		return;
-	}
-
-	init_parser(&parser, &diags, lexer.tokens, lexer.tk_count, &map);
-	Node* tree = parse_expression(&parser);
-    print_ast(tree, 2);
-
-    codegen_init();
-
-    if (!diag_has_errors(&diags) && tree != NULL) {
-        int llvm_val = codegen_eval_expr(tree);
-        
-        if (llvm_val == 0) {
-            printf("Codegen Success: Emitted Value %d\n", llvm_val);
-            printf("made a file in build/canto.ll\n");
-        } else 
-            printf("Codegen Warning: codegen_eval_expr returned NULL\n");
-    }
-    codegen_dump();
-
-    if (diag_has_errors(&diags))
+    if (diag_has_errors(&diags)) {
         diag_render_report(&diags, &map);
+        goto cleanup;
+    }
 
-    free_parser(&parser);
-    clean_up(&lexer, &diags);
-	codegen_free();	
-	exit(0);
+    {
+        init_parser(&parser, &diags, lexer.tokens, lexer.tk_count, &map);
+        Node *tree = parse_program(&parser);
+
+        if (!diag_has_errors(&diags) && tree) {
+            print_ast(tree, 0);
+
+            codegen_free();
+            codegen_init();
+
+           // walk the program and codegen each statement
+            for (uint32_t i = 0; i < tree->block.count; i++) {
+                if (codegen_eval_expr(tree->block.stmts[i]) != 0) break;
+            }
+
+            codegen_dump();
+        }
+
+        if (diag_has_errors(&diags))
+            diag_render_report(&diags, &map);
+
+        free_parser(&parser);
+    }
+
+cleanup:
+    symtable_free(&lexer.symbols);
+    free(lexer.tokens);
+    diag_free(&diags);
 }
-
