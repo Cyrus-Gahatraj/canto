@@ -63,7 +63,11 @@ fn main() {
     let mut build = cc::Build::new();
     build
         .cpp(true)
-        .file("src/llvm/codegen.cpp")
+        .files([ 
+            "src/llvm/codegen.cpp",
+            "src/llvm/context.cpp",
+            "src/llvm/expr_gen.cpp",
+        ])
         .include("include")
         .include(&llvm_includedir)
         .flag("-std=c++20")
