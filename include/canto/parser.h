@@ -51,4 +51,5 @@ void free_parser(Parser* parser);
 
 Node* parse_program(Parser* parser);
 Node* parse_expression(Parser* parser);
+void print_ast(Node* node, int indent);
 

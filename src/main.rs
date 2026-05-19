@@ -12,7 +12,7 @@ use std::{
 /// Canto — a poetic, configurable programming language
 /// where the language itself can be shaped by your project.
 ///
-/// Run a .can file or start an interactive REPL session.
+/// Run a .ct file or start an interactive REPL session.
 #[derive(Parser)]
 #[command(
     name    = "canto",
@@ -20,7 +20,7 @@ use std::{
     author  = "Cyrus Gahatraj",
     about   = "The Canto language CLI",
     long_about = "Canto is a poetic, configurable programming language.\n\
-                  Run a .can file with `canto run <file>`, or start the REPL by running `canto` with no arguments"
+                  Run a .ct file with `canto run <file>`, or start the REPL by running `canto` with no arguments"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -29,15 +29,15 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Run a .can source file
+    /// Run a .ct source file
     ///
-    /// Loads editors.can from the project root first,
+    /// Loads editors.ct from the project root first,
     /// then executes the given file.
     ///
     /// Example:
-    ///   canto run src/main.can
+    ///   canto run src/main.ct
     Run {
-        /// Path to the .can file to execute
+        /// Path to the .ct file to execute
         path: String,
     },
 }
@@ -60,15 +60,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Read and execute a .can source file.
+/// Read and execute a .ct source file.
 /// Exits with code 65 on compile error (bad data format),
 /// or code 70 on runtime error (internal software error).
 fn read_file(engine: Engine, path: &Path) {
+    if path.extension().and_then(|ext| ext.to_str()) != Some("ct") {
+       eprintln!("Error: File must have a .ct extension");
+       return;
+    }
+
     let source = std::fs::read_to_string(path)
         .expect("Could not read file — check the path and try again");
 
     engine.run(&source, Option::Some(path));
-
 }
 
 /// Start an interactive REPL session.
@@ -80,7 +84,7 @@ fn run_repl(engine: Engine) -> io::Result<()> {
     println!("────────────────────────────────────────────");
 
     let mut line  = String::new();
-    let     stdin = io::stdin();
+    let stdin = io::stdin();
 
     loop {
         print!("canto: ");

@@ -4,6 +4,20 @@ Value* expr_gen(Node* node) {
 	if (!node) return nullptr;
 
 	switch(node->kind) {
+		case NODE_IDENT: {
+			std::string key = "var_" + std::to_string(node->ident.sym);
+
+			auto it = NamedValues.find(key);
+			if (it == NamedValues.end()) {
+				fprintf(stderr, "Compiler Error: Undefined variable sym=%u\n",
+							node->ident.sym);
+				return nullptr;
+			}
+
+			AllocaInst* slot = it->second;
+			return Builder->CreateLoad(slot->getAllocatedType(), slot, "load");
+		}
+
 		case NODE_INT_LIT: {
 		   return ConstantInt::get(
 				   Type::getInt64Ty(*TheContext),

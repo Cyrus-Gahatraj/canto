@@ -17,4 +17,5 @@ extern std::map<std::string, AllocaInst*> NamedValues;
 
 // forward declarations
 Value* expr_gen(Node *node);
+Value* stmt_gen(Node *node);
 

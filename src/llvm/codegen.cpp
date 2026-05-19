@@ -5,6 +5,7 @@
 using namespace llvm;
 
 extern "C" void codegen_init(void) {
+	NamedValues.clear();
 	TheContext = std::make_unique<LLVMContext>();
 	TheModule = std::make_unique<Module>("Canto", *TheContext);
 	Builder = std::make_unique<IRBuilder<>>(*TheContext);
@@ -13,6 +14,7 @@ extern "C" void codegen_init(void) {
 	// get take a 
 	//		return type
 	//		and args
+	//		define i32 @main() { entry: }
 	FunctionType* fn_type = FunctionType::get(Builder->getInt32Ty(), false);
 	Function* main_fn = Function::Create(
 			fn_type,
@@ -26,7 +28,7 @@ extern "C" void codegen_init(void) {
 } 
 
 extern "C" int codegen_eval_expr(Node *node){
-	Value* result = expr_gen(node);
+	Value* result = stmt_gen(node);
 	if (!result) return -1;
 
 	Value* ret;
@@ -55,6 +57,10 @@ extern "C" void codegen_dump(void) {
     }
 
 	TheModule->print(out, nullptr);
+}
+
+extern "C" void codegen_print_ir(void) {
+    TheModule->print(errs(), nullptr);
 }
 
 extern "C" void codegen_free() {

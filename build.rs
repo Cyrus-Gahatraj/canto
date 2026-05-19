@@ -31,6 +31,7 @@ fn main() {
         .include("src")
         .include("include")
         .files([
+            "src/c/canto.c",
             "src/c/memory.c",
             "src/c/lexer.c",
             "src/c/compiler.c",
@@ -67,6 +68,7 @@ fn main() {
             "src/llvm/codegen.cpp",
             "src/llvm/context.cpp",
             "src/llvm/expr_gen.cpp",
+            "src/llvm/stmt_gen.cpp",
         ])
         .include("include")
         .include(&llvm_includedir)

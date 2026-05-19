@@ -10,8 +10,8 @@ extern "C" {
 	int codegen_eval_expr(Node* node);
 	void codegen_free(void);
 
-	// testing
 	void codegen_dump(void);
+	void codegen_print_ir(void);
 
 #ifdef __cplusplus
 }
