@@ -31,7 +31,6 @@ fn main() {
         .include("src")
         .include("include")
         .files([
-            "src/c/canto.c",
             "src/c/memory.c",
             "src/c/lexer.c",
             "src/c/compiler.c",

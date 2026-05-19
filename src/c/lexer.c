@@ -197,37 +197,74 @@ static void number(Lexer* lexer) {
 	append_token(lexer, tk);
 }
 
-static void string(Lexer* lexer, DiagEngine* diags) {
-	const char* string_start = lexer->start;
 
-	next(lexer);
-	TokenFlags flags = TOKEN_FLAG_NONE;
+static void string(Lexer* lexer, DiagEngine* diags) {
+    next(lexer); 
+    lexer->start = lexer->current; 
 
     while (!at_end(lexer)) {
         char c = peek(lexer);
-    
-		if (c == '{') flags |= TOKEN_FLAG_INTERPOLATE;
+
+        if (c == '`') {
+            // Emit the preceding raw string text if it actually contains characters
+            if (lexer->current > lexer->start) {
+                Token str_tk = create_token(lexer, TK_STRING_LIT, TOKEN_FLAG_NONE);
+                uint32_t len = get_token_length(lexer->start, lexer->current);
+                Symbol symbol = { .start = lexer->start, .length = len };
+                str_tk.sym = intern_symbol(&lexer->symbols, &symbol);
+                append_token(lexer, str_tk);
+            }
+
+            // Step directly over the opening backtick
+            next(lexer); 
+            lexer->start = lexer->current; // Now lexer->start points to the identifier name
+
+            while (!at_end(lexer) && peek(lexer) != '`' && peek(lexer) != '"') {
+                if (peek(lexer) == '\n') {
+                    lexer->line++;
+                    add_newline_offset(lexer);
+                }
+                next(lexer);
+            }
+
+            if (peek(lexer) != '`') {
+                append_token(lexer, error_token(lexer, diags, "Expected closing backtick '`' for interpolation."));
+                return;
+            }
+
+            Token ident_tk = create_token(lexer, TK_IDENT, TOKEN_FLAG_NONE);
+            uint32_t len = get_token_length(lexer->start, lexer->current);
+            Symbol symbol = { .start = lexer->start, .length = len };
+            ident_tk.sym = intern_symbol(&lexer->symbols, &symbol);
+            append_token(lexer, ident_tk);
+
+            next(lexer); 
+            
+            lexer->start = lexer->current; 
+            continue;
+        }
+
         if (c == '"') {
+            if (lexer->current > lexer->start) {
+                Token str_tk = create_token(lexer, TK_STRING_LIT, TOKEN_FLAG_NONE);
+                uint32_t len = get_token_length(lexer->start, lexer->current);
+                Symbol symbol = { .start = lexer->start, .length = len };
+                str_tk.sym = intern_symbol(&lexer->symbols, &symbol);
+                append_token(lexer, str_tk);
+            }
+            
             next(lexer);
-			Token tk = create_token(lexer, TK_STRING_LIT, TOKEN_FLAG_NONE);
-			uint32_t length = get_token_length(lexer->start, lexer->current);
-			Symbol symbol = { .start = lexer->start, .length = length };
-			tk.sym = intern_symbol(&lexer->symbols, &symbol);
-            append_token(lexer, tk);
             return;
         }
 
         if (c == '\n') {
-			next(lexer);
 			add_newline_offset(lexer);
             lexer->line++;
         }
         next(lexer);
     }
 
-	lexer->start = string_start;
-
-    append_token(lexer, error_token(lexer, diags, "Unterminated string."));
+    append_token(lexer, error_token(lexer, diags, "Unterminated string literal."));
 }
 
 void run_lex(Lexer *lexer, DiagEngine *diags) {

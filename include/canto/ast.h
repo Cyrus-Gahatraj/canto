@@ -113,6 +113,11 @@ struct Node {
             uint32_t count;
         } block;
 
+		struct {
+			struct Node** exprs;
+			uint32_t count;
+		} write;
+
 		// let 
 		struct {
             uint32_t name_sym;

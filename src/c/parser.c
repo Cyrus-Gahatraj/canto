@@ -233,10 +233,61 @@ static Node* parse_let_declaration(Parser* parser) {
 	return node;
 }
 
+
+static Node* parse_write(Parser* parser) {
+    Span start = current(parser)->span;
+    next(parser);
+
+    Node *node = make_node(parser, NODE_WRITE, start);
+    node->write.exprs = malloc(sizeof(Node*) * 64);
+    node->write.count = 0;
+
+    while (true) {
+        skip_trivia(parser);
+
+        TokenKind k = current(parser)->kind;
+
+        // stop conditions 
+        if (k == TK_LEX_EOF   ||
+            k == TK_SEMICOLON ||
+            k == TK_NEWLINE   ||
+            k == TK_RBRACE)
+            break;
+
+        // optional comma separator — consume and continue
+        if (k == TK_COMMA) { next(parser); continue; }
+
+        Node *arg = NULL;
+
+        if (k == TK_STRING_LIT) {
+            Token tk = *current(parser);
+            next(parser);
+            arg = make_node(parser, NODE_STRING_LIT, tk.span);
+            arg->string_lit.sym          = tk.sym;
+            arg->string_lit.interpolated = false;
+        }
+        else if (k == TK_IDENT) {
+            Token tk = *current(parser);
+            next(parser);
+            arg = make_node(parser, NODE_IDENT, tk.span);
+            arg->ident.sym = tk.sym;
+        }
+        else {
+            arg = parse_expression(parser);
+        }
+
+        if (arg)
+            node->write.exprs[node->write.count++] = arg;
+    }
+
+    return node;
+}
+
 static Node* parse_stmt(Parser* parser) {
     skip_trivia(parser);
     switch (current(parser)->kind) {
         case TK_KW_LET: return parse_let_declaration(parser);
+        case TK_KW_WRITE: return parse_write(parser);
         case TK_LEX_EOF: return NULL;
         default:         return parse_expression(parser);
     }
@@ -339,6 +390,12 @@ void print_ast(Node* node, int indent) {
 				   node->let.type_ann ? "yes" : "no");
 			if (node->let.type_ann) print_ast(node->let.type_ann, indent + 1);
 			print_ast(node->let.value, indent + 1);
+			break;
+
+		case NODE_WRITE:
+			printf("Write Statement (%u items):\n", node->write.count);
+			for (uint32_t i = 0; i < node->write.count; i++)
+				print_ast(node->write.exprs[i], indent + 1);
 			break;
 
 		case NODE_PROGRAM:
