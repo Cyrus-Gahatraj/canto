@@ -1,3 +1,4 @@
+#include "canto/symtable.h"
 #include "context.hpp"
 
 Value* expr_gen(Node* node) {
@@ -32,6 +33,19 @@ Value* expr_gen(Node* node) {
 			// 1 or 0 depending on true or false
 			return ConstantInt::get(Type::getInt1Ty(*TheContext),
 									node->bool_lit.value? 1 : 0);
+
+		case NODE_STRING_LIT: {
+			if (!TheSymtable) {
+				fprintf(stderr, "codegen: no symbol table set\n");
+				return nullptr;
+			}
+
+			const Symbol* sym = &TheSymtable->syms[node->string_lit.sym];
+
+			return Builder->CreateGlobalStringPtr(
+					StringRef(sym->start, sym->length), "str");
+
+		}
 
 		case NODE_UNARY: {
             Value *operand = expr_gen(node->unary.expr);
@@ -123,6 +137,7 @@ Value* expr_gen(Node* node) {
             return expr_gen(node->group.expr);
 
 		default:
+			fprintf(stderr, "Codegen Error: Unhandled node kind %d\n", node->kind);
 			return nullptr;
 	}
 }

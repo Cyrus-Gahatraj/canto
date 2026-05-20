@@ -392,6 +392,11 @@ void print_ast(Node* node, int indent) {
 			print_ast(node->let.value, indent + 1);
 			break;
 
+		case NODE_STRING_LIT:
+			printf("StringLit: sym=%u interp=%d\n",
+				   node->string_lit.sym, node->string_lit.interpolated);
+			break;
+
 		case NODE_WRITE:
 			printf("Write Statement (%u items):\n", node->write.count);
 			for (uint32_t i = 0; i < node->write.count; i++)

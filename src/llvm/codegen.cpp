@@ -68,5 +68,10 @@ extern "C" void codegen_free() {
 	TheModule.reset();
 	TheContext.reset();
 	NamedValues.clear();
+	TheSymtable = nullptr;
+}
+
+extern "C" void codegen_set_symtable(SymTable *table) {
+    TheSymtable = table;
 }
 

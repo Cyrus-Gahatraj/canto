@@ -197,28 +197,27 @@ static void number(Lexer* lexer) {
 	append_token(lexer, tk);
 }
 
-
 static void string(Lexer* lexer, DiagEngine* diags) {
-    next(lexer); 
-    lexer->start = lexer->current; 
+    next(lexer);
+    lexer->start = lexer->current;
 
     while (!at_end(lexer)) {
         char c = peek(lexer);
 
         if (c == '`') {
-            // Emit the preceding raw string text if it actually contains characters
+
             if (lexer->current > lexer->start) {
-                Token str_tk = create_token(lexer, TK_STRING_LIT, TOKEN_FLAG_NONE);
-                uint32_t len = get_token_length(lexer->start, lexer->current);
-                Symbol symbol = { .start = lexer->start, .length = len };
-                str_tk.sym = intern_symbol(&lexer->symbols, &symbol);
-                append_token(lexer, str_tk);
+                uint32_t len = (uint32_t)(lexer->current - lexer->start);
+                Symbol sym   = { .start = lexer->start, .length = len };
+                Token  str   = create_token(lexer, TK_STRING_LIT, TOKEN_FLAG_NONE);
+                str.sym      = intern_symbol(&lexer->symbols, &sym);
+                append_token(lexer, str);
             }
 
-            // Step directly over the opening backtick
-            next(lexer); 
-            lexer->start = lexer->current; // Now lexer->start points to the identifier name
+            next(lexer);
+            lexer->start = lexer->current;
 
+            // scan until closing ` or end of string
             while (!at_end(lexer) && peek(lexer) != '`' && peek(lexer) != '"') {
                 if (peek(lexer) == '\n') {
                     lexer->line++;
@@ -228,38 +227,74 @@ static void string(Lexer* lexer, DiagEngine* diags) {
             }
 
             if (peek(lexer) != '`') {
-                append_token(lexer, error_token(lexer, diags, "Expected closing backtick '`' for interpolation."));
+                append_token(lexer,
+                    error_token(lexer, diags,
+                        "expected closing '`' for interpolation."));
                 return;
             }
 
-            Token ident_tk = create_token(lexer, TK_IDENT, TOKEN_FLAG_NONE);
-            uint32_t len = get_token_length(lexer->start, lexer->current);
-            Symbol symbol = { .start = lexer->start, .length = len };
-            ident_tk.sym = intern_symbol(&lexer->symbols, &symbol);
-            append_token(lexer, ident_tk);
+            // classify the content between the backticks
+			// ident, integer, double or bool
+            uint32_t    len  = (uint32_t)(lexer->current - lexer->start);
+            const char *text = lexer->start;
 
-            next(lexer); 
-            
-            lexer->start = lexer->current; 
+            if (len == 0) {
+                append_token(lexer,
+                    error_token(lexer, diags, "empty interpolation '``'."));
+                next(lexer);
+                lexer->start = lexer->current;
+                continue;
+            }
+
+            bool is_int   = true;
+            bool is_float = false;
+            for (uint32_t i = 0; i < len; i++) {
+                char ch = text[i];
+                if (ch == '.' && !is_float && i > 0) {
+                    is_float = true;
+                    continue;
+                }
+                if (ch < '0' || ch > '9') { is_int = false; break; }
+            }
+            if (is_float && !is_int) is_int = false;
+
+            Token interp_tk;
+            if (is_int && !is_float) {
+                interp_tk          = create_token(lexer, TK_INT_LIT, TOKEN_FLAG_NONE);
+                interp_tk.as.i64   = strtoll(text, NULL, 10);
+            } else if (is_int && is_float) {
+                interp_tk          = create_token(lexer, TK_DOUBLE_LIT, TOKEN_FLAG_NONE);
+                interp_tk.as.f64   = strtod(text, NULL);
+            } else {
+                Symbol sym         = { .start = text, .length = len };
+                interp_tk          = create_token(lexer, TK_IDENT, TOKEN_FLAG_NONE);
+                interp_tk.sym      = intern_symbol(&lexer->symbols, &sym);
+            }
+            append_token(lexer, interp_tk);
+
+            next(lexer);
+            lexer->start = lexer->current;
             continue;
         }
 
         if (c == '"') {
             if (lexer->current > lexer->start) {
-                Token str_tk = create_token(lexer, TK_STRING_LIT, TOKEN_FLAG_NONE);
-                uint32_t len = get_token_length(lexer->start, lexer->current);
-                Symbol symbol = { .start = lexer->start, .length = len };
-                str_tk.sym = intern_symbol(&lexer->symbols, &symbol);
-                append_token(lexer, str_tk);
+                uint32_t len = (uint32_t)(lexer->current - lexer->start);
+                Symbol sym   = { .start = lexer->start, .length = len };
+                Token  str   = create_token(lexer, TK_STRING_LIT, TOKEN_FLAG_NONE);
+                str.sym      = intern_symbol(&lexer->symbols, &str.sym == 0
+                                             ? &(Symbol){.start=lexer->start,.length=len}
+                                             : &sym);
+                str.sym      = intern_symbol(&lexer->symbols, &sym);
+                append_token(lexer, str);
             }
-            
             next(lexer);
             return;
         }
 
         if (c == '\n') {
-			add_newline_offset(lexer);
             lexer->line++;
+            add_newline_offset(lexer);
         }
         next(lexer);
     }

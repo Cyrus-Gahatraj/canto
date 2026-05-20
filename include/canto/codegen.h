@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast.h"
+#include "symtable.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -11,7 +12,7 @@ extern "C" {
 	void codegen_free(void);
 
 	void codegen_dump(void);
-	void codegen_print_ir(void);
+	void codegen_set_symtable(SymTable *table);
 
 #ifdef __cplusplus
 }

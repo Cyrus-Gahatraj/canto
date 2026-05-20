@@ -34,6 +34,7 @@ void compile(const char* source, const char* file_path){
 
             codegen_free();
             codegen_init();
+			codegen_set_symtable(&lexer.symbols);
 
            // walk the program and codegen each statement
             for (uint32_t i = 0; i < tree->block.count; i++) {

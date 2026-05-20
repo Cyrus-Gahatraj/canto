@@ -1,5 +1,6 @@
 #pragma once
 #include "canto/ast.h"
+#include "canto/symtable.h"
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
@@ -14,6 +15,7 @@ extern std::unique_ptr<LLVMContext> TheContext;
 extern std::unique_ptr<IRBuilder<>> Builder;
 extern std::unique_ptr<Module>      TheModule;
 extern std::map<std::string, AllocaInst*> NamedValues;
+extern SymTable *TheSymtable;
 
 // forward declarations
 Value* expr_gen(Node *node);
