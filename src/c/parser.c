@@ -17,6 +17,7 @@ static Node* parse_bool(Parser* parser);
 static Node* parse_binary(Parser* parser, Node* left);
 static Node* parse_grouping(Parser* parser);
 static Node* parse_let_declaration(Parser* parser);
+static Node* parse_string(Parser* parser);
 
 static const ParseRule global_rules[TK_COUNT] = {
 	// identifier
@@ -51,6 +52,9 @@ static const ParseRule global_rules[TK_COUNT] = {
 	[TK_BANG]       = { parse_unary, NULL, PREC_NONE },
 	[TK_BOOL_AND]   = { NULL, parse_binary, PREC_AND },
     [TK_BOOL_OR]    = { NULL, parse_binary, PREC_OR },
+
+	// string
+	[TK_STRING_LIT] = { parse_string, NULL, PREC_NONE },
 };
 
 inline static Token* current(Parser* parser) {
@@ -242,40 +246,19 @@ static Node* parse_write(Parser* parser) {
     node->write.exprs = malloc(sizeof(Node*) * 64);
     node->write.count = 0;
 
-    while (true) {
+	while (true) {
         skip_trivia(parser);
+        TokenKind kind = current(parser)->kind;
 
-        TokenKind k = current(parser)->kind;
-
-        // stop conditions 
-        if (k == TK_LEX_EOF   ||
-            k == TK_SEMICOLON ||
-            k == TK_NEWLINE   ||
-            k == TK_RBRACE)
+        if (kind == TK_LEX_EOF || kind == TK_SEMICOLON || kind == TK_NEWLINE || kind == TK_RBRACE)
             break;
 
-        // optional comma separator — consume and continue
-        if (k == TK_COMMA) { next(parser); continue; }
+        if (kind == TK_COMMA) {
+			next(parser); 
+			continue; 
+		}
 
-        Node *arg = NULL;
-
-        if (k == TK_STRING_LIT) {
-            Token tk = *current(parser);
-            next(parser);
-            arg = make_node(parser, NODE_STRING_LIT, tk.span);
-            arg->string_lit.sym          = tk.sym;
-            arg->string_lit.interpolated = false;
-        }
-        else if (k == TK_IDENT) {
-            Token tk = *current(parser);
-            next(parser);
-            arg = make_node(parser, NODE_IDENT, tk.span);
-            arg->ident.sym = tk.sym;
-        }
-        else {
-            arg = parse_expression(parser);
-        }
-
+        Node *arg = parse_expression(parser);
         if (arg)
             node->write.exprs[node->write.count++] = arg;
     }
