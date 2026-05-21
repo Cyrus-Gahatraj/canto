@@ -36,12 +36,21 @@ void compile(const char* source, const char* file_path){
             codegen_init();
 			codegen_set_symtable(&lexer.symbols);
 
+			bool ok = true;
            // walk the program and codegen each statement
-            for (uint32_t i = 0; i < tree->block.count; i++) {
-                if (codegen_eval_expr(tree->block.stmts[i]) != 0) break;
-            }
+           for (uint32_t i = 0; i < tree->block.count; i++) {
+                if (codegen_eval_expr(tree->block.stmts[i]) != 0){
+					ok = false;
+					break;
+				} 
+           }
 
-            codegen_dump();
+		   if (ok) codegen_finalize(0);
+		   else codegen_finalize(1);
+
+		   printf("\n");
+		   codegen_print_ir();
+           codegen_dump();
         }
 
         if (diag_has_errors(&diags))

@@ -30,16 +30,6 @@ extern "C" void codegen_init(void) {
 extern "C" int codegen_eval_expr(Node *node){
 	Value* result = stmt_gen(node);
 	if (!result) return -1;
-
-	Value* ret;
-	if (result->getType()->isDoubleTy()) 
-		ret = Builder->CreateFPToSI(result, Builder->getInt32Ty(), "fptosi");
-	else if (result->getType()->isIntegerTy(1)) // bool: i1 -> i32
-		ret = Builder->CreateZExt(result, Builder->getInt32Ty(), "zext");
-	else 
-		ret = Builder->CreateIntCast(result, Builder->getInt32Ty(), true);
-
-	Builder->CreateRet(ret);
 	return 0;
 }
 
@@ -73,5 +63,9 @@ extern "C" void codegen_free() {
 
 extern "C" void codegen_set_symtable(SymTable *table) {
     TheSymtable = table;
+}
+
+extern "C" void codegen_finalize(int ret) {
+	Builder->CreateRet(Builder->getInt32(ret));
 }
 

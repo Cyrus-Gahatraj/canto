@@ -13,6 +13,8 @@ extern "C" {
 
 	void codegen_dump(void);
 	void codegen_set_symtable(SymTable *table);
+	void codegen_finalize(int ret);
+	void codegen_print_ir();
 
 #ifdef __cplusplus
 }
