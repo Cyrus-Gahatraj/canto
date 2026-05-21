@@ -103,7 +103,7 @@ static bool is_digit(char c) {
 }
 
 static bool is_trivia(char c) {
-	return (c == ' ' || c == '\n' || c == '\t' || c == '~');
+	return (c == ' ' || c == '\n' || c == '\t');
 }
 
 static char peek(Lexer* lexer) {
@@ -136,6 +136,7 @@ static void trivia(Lexer* lexer) {
 				break;
 			case '\n': advance_newline(lexer); break;
 			case '~':
+				is_trivia(c);
 				if (peek_next(lexer) == '~') {
 					//multiline comment
 					next(lexer); next(lexer);
@@ -146,9 +147,11 @@ static void trivia(Lexer* lexer) {
 							break;
 						}
 						if (peek(lexer) == '\n') advance_newline(lexer);
+						else next(lexer);
 					}
 				}
 				else {
+					next(lexer);
 					while(!at_end(lexer) && peek(lexer) != '\n') {
 						next(lexer);	
 					}
@@ -309,9 +312,10 @@ void run_lex(Lexer *lexer, DiagEngine *diags) {
 
         if (is_alpha(c)) { identifier(lexer); continue; }
         if (is_digit(c)) { next(lexer); number(lexer); continue; }
-        if (is_trivia(c)) { next(lexer); trivia(lexer); continue; }
+        if (is_trivia(c)) { trivia(lexer); continue; }
 
         switch (c) {
+			case '~': trivia(lexer); continue;
             case '=': next(lexer); append_token(lexer, create_token(lexer, TK_EQUAL,     TOKEN_FLAG_NONE)); break;
             case '(': next(lexer); append_token(lexer, create_token(lexer, TK_LPAREN,    TOKEN_FLAG_NONE)); break;
             case ')': next(lexer); append_token(lexer, create_token(lexer, TK_RPAREN,    TOKEN_FLAG_NONE)); break;
@@ -329,7 +333,7 @@ void run_lex(Lexer *lexer, DiagEngine *diags) {
             case '%': next(lexer); append_token(lexer, create_token(lexer, TK_PERCENTAGE,TOKEN_FLAG_NONE)); break;
             case '"': string(lexer, diags); break;
 
-            /* two-character operators — next() FIRST, then match second char */
+            // two-character operators
             case '!':
                 next(lexer);
                 append_token(lexer, create_token(lexer,
@@ -385,6 +389,13 @@ void run_lex(Lexer *lexer, DiagEngine *diags) {
                 break;
         }
     }
+
+	for (uint32_t i = 0; i < lexer->tk_count; i++) {
+    fprintf(stderr, "  [%u] kind=%d span=[%u,%u]\n",
+            i, lexer->tokens[i].kind,
+            lexer->tokens[i].span.start,
+            lexer->tokens[i].span.length);
+}
 
     lexer->start = lexer->current;
     append_token(lexer, create_token(lexer, TK_LEX_EOF, TOKEN_FLAG_NONE));

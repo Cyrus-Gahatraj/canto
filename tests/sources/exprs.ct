@@ -1,4 +1,25 @@
+~~
+  Arithmetic Precedence & Operator Test
+  
+  This test validates that the Canto compiler correctly parses:
+  1. Operator precedence (multiplication/modulo before addition/subtraction).
+  2. Balanced parenthesis groupings.
+  3. Proper evaluation of integer math equations.
+~~
+
+
+~ Step 1: Tests integer division truncation. 
+~ Math: 5 * 4 = 20. 3 / 9 evaluates to 0 in integer math. 20 + 0 = 20.
 let a (5 * 4 + 3 / 9)
+
+~ Step 2: Tests negative modulo arithmetic precedence.
+~ Math: 7 - (9 * 4) = 7 - 36 = -29. Then, -29 % 8 evaluates to -5.
 let b (7 - 9 * 4) % 8
+
+~ Step 3: Accumulates the previously computed identifier results.
+~ Math: 20 + (-5) = 15.
 let c (a + b)
+
+~ Final Output Verification: Emits the resulting value to stdout.
+~ Expected Terminal Output: 15
 write c
