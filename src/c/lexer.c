@@ -390,13 +390,6 @@ void run_lex(Lexer *lexer, DiagEngine *diags) {
         }
     }
 
-	for (uint32_t i = 0; i < lexer->tk_count; i++) {
-    fprintf(stderr, "  [%u] kind=%d span=[%u,%u]\n",
-            i, lexer->tokens[i].kind,
-            lexer->tokens[i].span.start,
-            lexer->tokens[i].span.length);
-}
-
     lexer->start = lexer->current;
     append_token(lexer, create_token(lexer, TK_LEX_EOF, TOKEN_FLAG_NONE));
 }
