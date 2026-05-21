@@ -123,9 +123,9 @@ Value* expr_gen(Node* node) {
                                     : Builder->CreateICmpNE (L, R, "ine");
 
 				// Logical
-				case TK_BOOL_AND:
+				case TK_KW_AND:
                     return Builder->CreateAnd(L, R, "and");
-                case TK_BOOL_OR:
+                case TK_KW_OR:
                     return Builder->CreateOr (L, R, "or");
 
 				default:

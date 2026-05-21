@@ -7,8 +7,8 @@
 
 typedef enum {
     PREC_NONE		= 0,
-    PREC_OR			= 1,   // ||
-    PREC_AND		= 2,   // &&
+    PREC_OR			= 1,   // or 
+    PREC_AND		= 2,   // and 
     PREC_EQ         = 3,   // = !=
     PREC_CMP        = 4,   // < > <= >=
     PREC_TERM       = 5,   // + -

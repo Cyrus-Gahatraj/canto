@@ -13,6 +13,7 @@ let,        TK_KW_LET
 design,     TK_KW_DESIGN
 if,         TK_KW_IF
 or,         TK_KW_OR
+and,        TK_KW_AND
 else,       TK_KW_ELSE
 when,       TK_KW_WHEN
 write,      TK_KW_WRITE

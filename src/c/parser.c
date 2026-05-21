@@ -17,6 +17,8 @@ static Node* parse_bool(Parser* parser);
 static Node* parse_binary(Parser* parser, Node* left);
 static Node* parse_grouping(Parser* parser);
 static Node* parse_let_declaration(Parser* parser);
+static Node* parse_block(Parser* parser);
+static Node* parse_if_stmt(Parser* parser);
 static Node* parse_string(Parser* parser);
 
 static const ParseRule global_rules[TK_COUNT] = {
@@ -50,8 +52,8 @@ static const ParseRule global_rules[TK_COUNT] = {
 	[TK_KW_TRUE]    = { parse_bool, NULL, PREC_NONE },
 	[TK_KW_FALSE]   = { parse_bool, NULL, PREC_NONE },
 	[TK_BANG]       = { parse_unary, NULL, PREC_NONE },
-	[TK_BOOL_AND]   = { NULL, parse_binary, PREC_AND },
-    [TK_BOOL_OR]    = { NULL, parse_binary, PREC_OR },
+	[TK_KW_AND]     = { NULL, parse_binary, PREC_AND },
+    [TK_KW_OR]      = { NULL, parse_binary, PREC_OR },
 
 	// string
 	[TK_STRING_LIT] = { parse_string, NULL, PREC_NONE },
@@ -237,7 +239,6 @@ static Node* parse_let_declaration(Parser* parser) {
 	return node;
 }
 
-
 static Node* parse_write(Parser* parser) {
     Span start = current(parser)->span;
     next(parser);
@@ -266,14 +267,72 @@ static Node* parse_write(Parser* parser) {
     return node;
 }
 
+static Node* parse_if_stmt(Parser* parser) {
+
+	Node* cond = parse_expression(parser);
+	if (!cond) return NULL;
+
+	skip_trivia(parser);
+	expect_token(parser, TK_LBRACE, "Expected '{' after if condition");
+	Node* then_block = parse_block(parser);
+
+	Node* else_branch = NULL;
+	skip_trivia(parser);
+
+	if (match(parser, TK_KW_OR)) 
+		else_branch = parse_if_stmt(parser);
+	else if (match(parser, TK_KW_ELSE)) {
+        skip_trivia(parser);
+        expect_token(parser, TK_LBRACE, "Expected '{' after else");
+        else_branch = parse_block(parser);
+    }
+
+	Node* if_node = make_node(parser, NODE_IF, (Span) {0, parser->cursor});
+	if_node->if_.cond = cond;
+	if_node->if_.then_ = then_block;
+	if_node->if_.else_ = else_branch;
+
+	return if_node;
+}
+
 static Node* parse_stmt(Parser* parser) {
     skip_trivia(parser);
     switch (current(parser)->kind) {
         case TK_KW_LET: return parse_let_declaration(parser);
         case TK_KW_WRITE: return parse_write(parser);
+		case TK_KW_IF: next(parser); return parse_if_stmt(parser);
         case TK_LEX_EOF: return NULL;
         default:         return parse_expression(parser);
     }
+}
+
+static Node* parse_block(Parser* parser) {
+	Node **stmts = NULL; 
+	uint32_t count = 0, cap = 0;
+
+	while(!check(parser, TK_RBRACE) && !check(parser, TK_LEX_EOF)) {
+		skip_trivia(parser);
+		if (check(parser, TK_RBRACE) || check(parser, TK_LEX_EOF)) break;
+
+		Node *s = parse_stmt(parser);
+		if (!s) break;
+
+		if (count >= cap) {
+			cap = cap ? cap * 2 : 8;
+			stmts = realloc(stmts, cap * sizeof(Node*));
+		}
+		stmts[count++] = s;
+
+		skip_trivia(parser);
+        match(parser, TK_SEMICOLON);
+	}
+	expect_token(parser, TK_RBRACE, "Expected '}' to close block.");
+
+	Node* block = make_node(parser, NODE_BLOCK,
+							(Span){0, parser->cursor});
+	block->block.stmts = stmts;
+	block->block.count = count;
+	return block;
 }
 
 Node* parse_program(Parser* parser) {

@@ -355,26 +355,6 @@ void run_lex(Lexer *lexer, DiagEngine *diags) {
                     TOKEN_FLAG_NONE));
                 break;
 
-            case '&':
-                next(lexer);
-                if (match(lexer, '&'))
-                    append_token(lexer, create_token(lexer, TK_BOOL_AND, TOKEN_FLAG_NONE));
-                else {
-                    Token err = error_token(lexer, diags, "unexpected '&', did you mean '&&'?");
-                    append_token(lexer, err);
-                }
-                break;
-
-            case '|':
-                next(lexer);
-                if (match(lexer, '|'))
-                    append_token(lexer, create_token(lexer, TK_BOOL_OR, TOKEN_FLAG_NONE));
-                else {
-                    Token err = error_token(lexer, diags, "unexpected '|', did you mean '||'?");
-                    append_token(lexer, err);
-                }
-                break;
-
             case '.':
                 next(lexer);
                 if (match(lexer, '.'))
