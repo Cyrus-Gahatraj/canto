@@ -30,8 +30,6 @@ void compile(const char* source, const char* file_path){
         Node *tree = parse_program(&parser);
 
         if (!diag_has_errors(&diags) && tree) {
-            print_ast(tree, 0);
-
             codegen_free();
             codegen_init();
 			codegen_set_symtable(&lexer.symbols);
