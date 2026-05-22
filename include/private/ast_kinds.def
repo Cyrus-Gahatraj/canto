@@ -29,6 +29,7 @@ AST_NODE(WHEN,        "Pattern Match Expression (when)")
 AST_NODE(WHEN_ARM,    "Pattern Match Arm")
 AST_NODE(TRY_SCOPE,      "Try Scope Block")
 AST_NODE(OPTIONAL_DECL,  "Optional Declaration")
+AST_NODE(LOOP,			 "Loop statement")
 AST_NODE(TYPE,           "Type Descriptor")
 
 /* Literal Leaves */

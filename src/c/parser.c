@@ -272,7 +272,16 @@ static Node* parse_if_stmt(Parser* parser) {
 	Node* cond = parse_expression(parser);
 	if (!cond) return NULL;
 
+	bool is_loop = false;
 	skip_trivia(parser);
+
+	if (check(parser, TK_PIPE)) {
+		next(parser);
+		skip_trivia(parser);
+		expect_token(parser, TK_KW_LOOP, "Expected 'loop' after '|'.");
+		is_loop = true;
+	}
+
 	expect_token(parser, TK_LBRACE, "Expected '{' after if condition");
 	Node* then_block = parse_block(parser);
 
@@ -281,18 +290,58 @@ static Node* parse_if_stmt(Parser* parser) {
 
 	if (match(parser, TK_KW_OR)) 
 		else_branch = parse_if_stmt(parser);
+
 	else if (match(parser, TK_KW_ELSE)) {
-        skip_trivia(parser);
-        expect_token(parser, TK_LBRACE, "Expected '{' after else");
-        else_branch = parse_block(parser);
-    }
+		skip_trivia(parser);
+		bool else_is_loop = false;
+
+		if (check(parser, TK_PIPE)) {
+			next(parser);
+			skip_trivia(parser);
+			expect_token(parser, TK_KW_LOOP, "Expected 'loop' after '|'.");
+			else_is_loop = true;
+		}
+
+		skip_trivia(parser);
+		expect_token(parser, TK_LBRACE, "Expected '{' after else");
+		else_branch = parse_block(parser);
+
+		if (else_is_loop) {
+			Node *loop = make_node(parser, NODE_LOOP,
+								   (Span){0, parser->cursor});
+			loop->loop.cond  = NULL;
+			loop->loop.count = NULL;
+			loop->loop.body  = else_branch;
+			else_branch = loop;
+		}
+	}
 
 	Node* if_node = make_node(parser, NODE_IF, (Span) {0, parser->cursor});
 	if_node->if_.cond = cond;
 	if_node->if_.then_ = then_block;
 	if_node->if_.else_ = else_branch;
+	if_node->if_.is_loop = is_loop;
 
 	return if_node;
+}
+
+static Node* parse_loop_stmt(Parser* parser) {
+    Node* loop_node = make_node(parser, NODE_LOOP, (Span) {0, parser->cursor});
+    loop_node->loop.cond       = NULL;
+    loop_node->loop.count      = NULL;
+
+    skip_trivia(parser);
+
+    // "loop 10 { .... }"
+    if (!check(parser, TK_LBRACE) && !check(parser, TK_LPAREN)) {
+        loop_node->loop.count = parse_expression(parser);
+        skip_trivia(parser);
+    }
+
+    expect_token(parser, TK_LBRACE, "Expected '{' to start loop body");
+    loop_node->loop.body = parse_block(parser);
+
+    return loop_node;
 }
 
 static Node* parse_stmt(Parser* parser) {
@@ -301,6 +350,7 @@ static Node* parse_stmt(Parser* parser) {
         case TK_KW_LET: return parse_let_declaration(parser);
         case TK_KW_WRITE: return parse_write(parser);
 		case TK_KW_IF: next(parser); return parse_if_stmt(parser);
+	    case TK_KW_LOOP: next(parser); return parse_loop_stmt(parser);
         case TK_LEX_EOF: return NULL;
         default:         return parse_expression(parser);
     }

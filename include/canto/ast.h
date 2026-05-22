@@ -76,7 +76,15 @@ struct Node {
             Node* cond;
             Node* then_;
             Node* else_; 
+			bool is_loop;
         } if_;
+
+		struct {
+			Node* cond;
+			Node* count;
+			Node* body;
+			bool is_infinite;
+		} loop;
 
 		// when (switch)
 		struct {

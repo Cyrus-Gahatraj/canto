@@ -18,7 +18,7 @@ else,       TK_KW_ELSE
 when,       TK_KW_WHEN
 write,      TK_KW_WRITE
 ask,        TK_KW_ASK
-recurse,    TK_KW_RECURSE
+loop,		TK_KW_LOOP
 continue,   TK_KW_CONTINUE
 return,     TK_KW_RETURN
 error,      TK_KW_ERROR

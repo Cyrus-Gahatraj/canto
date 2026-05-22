@@ -331,6 +331,7 @@ void run_lex(Lexer *lexer, DiagEngine *diags) {
             case '*': next(lexer); append_token(lexer, create_token(lexer, TK_STAR,      TOKEN_FLAG_NONE)); break;
             case '/': next(lexer); append_token(lexer, create_token(lexer, TK_SLASH,     TOKEN_FLAG_NONE)); break;
             case '%': next(lexer); append_token(lexer, create_token(lexer, TK_PERCENTAGE,TOKEN_FLAG_NONE)); break;
+			case '|': next(lexer); append_token(lexer, create_token(lexer, TK_PIPE, TOKEN_FLAG_NONE)); break;
             case '"': string(lexer, diags); break;
 
             // two-character operators
