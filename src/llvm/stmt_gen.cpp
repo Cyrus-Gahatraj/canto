@@ -80,6 +80,45 @@ Value* stmt_gen(Node* node) {
 
 			return ConstantInt::get(Builder->getInt32Ty(), 0);
 		 }
+		
+		case NODE_IF: {
+			Value* cond = expr_gen(node->if_.cond);
+			if (!cond) return NULL;
+
+			if (!cond->getType()->isIntegerTy(1))
+				cond = Builder->CreateICmpNE(cond,
+							ConstantInt::get(cond->getType(), 0),
+							"ifcond");
+
+			Function* fn = Builder->GetInsertBlock()->getParent();
+			BasicBlock* then_bb = BasicBlock::Create(*TheContext, "then", fn);
+			BasicBlock* else_bb = BasicBlock::Create(*TheContext, "else", fn);
+			BasicBlock* merge_bb = BasicBlock::Create(*TheContext, "merge", fn);
+
+			Builder->CreateCondBr(cond, then_bb,
+					node->if_.else_ ? else_bb : merge_bb);
+
+			// then
+			Builder->SetInsertPoint(then_bb);
+			stmt_gen(node->if_.then_);
+			if (!Builder->GetInsertBlock()->getTerminator())
+				Builder->CreateBr(merge_bb);
+
+			// else
+			if (node->if_.else_) {
+				Builder->SetInsertPoint(else_bb);
+				stmt_gen(node->if_.else_);
+				if (!Builder->GetInsertBlock()->getTerminator())
+					Builder->CreateBr(merge_bb);
+			} else {
+				Builder->SetInsertPoint(else_bb);
+				Builder->CreateBr(merge_bb);
+			}
+
+			// merge
+			Builder->SetInsertPoint(merge_bb);
+			return ConstantInt::get(Builder->getInt32Ty(), 0);
+		}
 
 		case NODE_PROGRAM:
         case NODE_BLOCK: {
