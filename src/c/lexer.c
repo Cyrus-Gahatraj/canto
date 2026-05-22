@@ -371,6 +371,7 @@ void run_lex(Lexer *lexer, DiagEngine *diags) {
         }
     }
 
+
     lexer->start = lexer->current;
     append_token(lexer, create_token(lexer, TK_LEX_EOF, TOKEN_FLAG_NONE));
 }

@@ -1,0 +1,42 @@
+~~
+Edit syntax with linux file navigation like style
+
+This test validates the implementation of Canto's unified '.edit' blocks
+by simulating a classic UNIX permission mask calculation and path resolution.
+In keeping with the Linux philosophy:
+
+    The single dot '.' inside an edit frame represents the CURRENT state.
+~~
+
+~ Permission for linux file system 
+~ Read (4) + Write (2) = 6 (Owner). Read (4) = 4 (Group/Public).
+let permissions 644
+
+~ An absolute edit occurs. A script must become executable.
+~ We completely override the mask to grant full execution flags (755).
+permissions.edit {
+	755
+}
+
+~  A relative edit occurs. We strip group and public read access.
+~ The dot '.' pulls the current value (755) directly into the math expression.
+~ Math: 755 - 55 = 700 (Strict Owner-Only Access).
+permissions.edit {
+	. - 55
+~   ^
+~  dot
+}
+
+~ Simple path parts.
+let parent_dir "usr"
+let current_dir "var"
+
+~~
+ Expected Terminal Output:
+
+ Accessing: /usr/var/script.sh
+ Security Mask: 700
+~~
+
+write "Accessing: /`parent_dir`/`current_dir`/script.sh"
+write "Security Mask: `permissions`"

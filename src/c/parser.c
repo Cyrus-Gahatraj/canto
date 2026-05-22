@@ -20,6 +20,10 @@ static Node* parse_let_declaration(Parser* parser);
 static Node* parse_block(Parser* parser);
 static Node* parse_if_stmt(Parser* parser);
 static Node* parse_string(Parser* parser);
+static Node* parse_dot_prefix    (Parser* parser);
+static Node* parse_dot_infix     (Parser* parser, Node* left);
+static Node* parse_dot_dot_infix (Parser* parser, Node* left);
+static Node* parse_edit          (Parser* parser, Node* target);
 
 static const ParseRule global_rules[TK_COUNT] = {
 	// identifier
@@ -39,6 +43,7 @@ static const ParseRule global_rules[TK_COUNT] = {
 	// Grouping
 	[TK_LPAREN]     = { parse_grouping, NULL, PREC_CALL },
 	[TK_RPAREN]     = { NULL, NULL, PREC_NONE },	 // RPAREN don't need grouping
+	[TK_PIPE]       = { NULL, NULL, PREC_NONE },
 
 	// Comparision
 	[TK_GT]         = { NULL, parse_binary, PREC_CMP },
@@ -57,6 +62,11 @@ static const ParseRule global_rules[TK_COUNT] = {
 
 	// string
 	[TK_STRING_LIT] = { parse_string, NULL, PREC_NONE },
+
+
+	// Dot
+	[TK_DOT]     = { parse_dot_prefix, parse_dot_infix, PREC_CALL },
+	[TK_DOT_DOT] = { parse_dot_prefix, parse_dot_dot_infix, PREC_CALL },
 };
 
 inline static Token* current(Parser* parser) {
@@ -247,21 +257,30 @@ static Node* parse_write(Parser* parser) {
     node->write.exprs = malloc(sizeof(Node*) * 64);
     node->write.count = 0;
 
-	while (true) {
+    while (true) {
         skip_trivia(parser);
         TokenKind kind = current(parser)->kind;
 
-        if (kind == TK_LEX_EOF || kind == TK_SEMICOLON || kind == TK_NEWLINE || kind == TK_RBRACE)
+        if (kind == TK_LEX_EOF   ||
+            kind == TK_SEMICOLON ||
+            kind == TK_NEWLINE   ||
+            kind == TK_RBRACE)
             break;
 
-        if (kind == TK_COMMA) {
-			next(parser); 
-			continue; 
-		}
+        if (kind == TK_COMMA) { next(parser); continue; }
+
+        if (kind == TK_KW_WRITE  ||
+            kind == TK_KW_LET    ||
+            kind == TK_KW_IF     ||
+            kind == TK_KW_LOOP   ||
+            kind == TK_KW_RETURN)
+            break;
 
         Node *arg = parse_expression(parser);
         if (arg)
             node->write.exprs[node->write.count++] = arg;
+        else
+            break;
     }
 
     return node;
@@ -323,6 +342,131 @@ static Node* parse_if_stmt(Parser* parser) {
 	if_node->if_.is_loop = is_loop;
 
 	return if_node;
+}
+
+static Node* parse_edit(Parser* parser, Node* target) {
+    Span start = current(parser)->span;
+    next(parser);   // consume 'edit'
+    skip_trivia(parser);
+    expect_token(parser, TK_LBRACE, "expected '{' after edit");
+    skip_trivia(parser);
+
+    Node  **pairs = NULL;
+    uint32_t count = 0, cap = 0;
+
+    while (!check(parser, TK_RBRACE) && !check(parser, TK_LEX_EOF)) {
+        skip_trivia(parser);
+        if (check(parser, TK_RBRACE)) break;
+
+        Span pair_span = current(parser)->span;
+        Node *pair     = make_node(parser, NODE_EDIT_PAIR, pair_span);
+
+        if (check(parser, TK_DOT_DOT)) {
+            // ..field: value  — parent field
+            next(parser);   // consume ..
+            Token field = expect_token(parser, TK_IDENT,
+                              "expected field name after '..'");
+            expect_token(parser, TK_COLON, "expected ':' after field name");
+            skip_trivia(parser);
+            pair->edit_pair.field_sym = field.sym;
+            pair->edit_pair.value     = parse_expression(parser);
+            pair->edit_pair.is_parent = true;
+
+        } else if (check(parser, TK_DOT)) {
+            next(parser);   // consume . 
+			skip_trivia(parser);
+
+            if (check(parser, TK_PLUS)  || check(parser, TK_MINUS) ||
+                check(parser, TK_STAR)  || check(parser, TK_SLASH)) {
+                // . op expr  — relative operation on self 
+                Token op = *current(parser);
+                next(parser);
+                skip_trivia(parser);
+                Node *val = parse_expression(parser);
+
+                Node *rel = make_node(parser, NODE_RELATIVE, op.span);
+                rel->relative.op        = op.kind;
+                rel->relative.expr      = val;
+                rel->relative.is_parent = false;
+
+                pair->edit_pair.field_sym = 0;
+                pair->edit_pair.value     = rel;
+                pair->edit_pair.is_parent = false;
+
+            } else {
+                // .field: value  — current design field
+                Token field = expect_token(parser, TK_IDENT,
+                                  "expected field name after '.'");
+                expect_token(parser, TK_COLON, "expected ':' after field name");
+                skip_trivia(parser);
+                pair->edit_pair.field_sym = field.sym;
+                pair->edit_pair.value     = parse_expression(parser);
+                pair->edit_pair.is_parent = false;
+            }
+
+        } else {
+            // plain value — absolute set on scalar variable 
+            pair->edit_pair.field_sym = 0;
+            pair->edit_pair.value     = parse_expression(parser);
+            pair->edit_pair.is_parent = false;
+        }
+
+        if (count >= cap) {
+            cap   = cap ? cap * 2 : 4;
+            pairs = realloc(pairs, cap * sizeof(Node*));
+        }
+        pairs[count++] = pair;
+
+        skip_trivia(parser);
+        match(parser, TK_COMMA);
+        skip_trivia(parser);
+    }
+
+    expect_token(parser, TK_RBRACE, "expected '}' to close edit block");
+
+    Node* node = make_node(parser, NODE_EDIT, start);
+    node->edit.target     = target;
+    node->edit.pairs      = pairs;
+    node->edit.pair_count = count;
+    return node;
+}
+
+static Node* parse_dot_prefix(Parser* parser) {
+    Token tk = *current(parser);
+    next(parser);   // consume . 
+    Node* node = make_node(parser, NODE_DOT, tk.span);
+    node->dot.left      = NULL;   // NULL = bare dot
+    node->dot.field_sym = 0;
+    return node;
+}
+
+static Node* parse_dot_infix(Parser* parser, Node* left) {
+    next(parser);   // consume .
+    skip_trivia(parser);
+
+    if (check(parser, TK_KW_EDIT)) {
+        return parse_edit(parser, left);   // hand off to edit parser
+    }
+
+    // normal field access
+    Token field = expect_token(parser, TK_IDENT,
+                      "expected field name after '.'");
+    Node* node = make_node(parser, NODE_DOT, field.span);
+    node->dot.left      = left;
+    node->dot.field_sym = field.sym;
+    return node;
+}
+
+static Node* parse_dot_dot_infix(Parser* parser, Node* left) {
+    Token tk = *current(parser);
+    next(parser);   // consume ..
+    skip_trivia(parser);
+    Token field = expect_token(parser, TK_IDENT,
+                      "expected field name after '..'");
+    Node* node = make_node(parser, NODE_DOT_DOT, tk.span);
+    node->dot.left      = left;
+    node->dot.field_sym = field.sym;
+    return node;
 }
 
 static Node* parse_loop_stmt(Parser* parser) {

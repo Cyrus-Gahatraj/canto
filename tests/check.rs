@@ -12,3 +12,10 @@ fn exprs_test() {
     CantoTest::new("exprs.ct").assert_output("15");
 }
 
+#[test]
+fn edits_test() {
+    CantoTest::new("edits.ct").assert_output(
+        "Accessing: /usr/var/script.sh\nSecurity Mask: 700"
+    );
+}
+
