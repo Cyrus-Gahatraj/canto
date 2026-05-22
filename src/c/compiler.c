@@ -9,7 +9,7 @@
 #include "canto/source_map.h"
 #include "canto/codegen.h"
 
-void compile(const char* source, const char* file_path){
+void compile(const char* source, const char* file_path, const char* output_path){
 	Lexer lexer;
 	DiagEngine diags;
 	SourceMap map;
@@ -48,7 +48,7 @@ void compile(const char* source, const char* file_path){
 
 		   printf("\n");
 		   codegen_print_ir();
-           codegen_dump();
+		   if (output_path != NULL) codegen_dump(output_path);
         }
 
         if (diag_has_errors(&diags))

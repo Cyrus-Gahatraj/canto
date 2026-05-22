@@ -1,6 +1,7 @@
 #include "canto/codegen.h"
 #include "canto/ast.h"
 #include "context.hpp"
+#include <format>
 
 using namespace llvm;
 
@@ -33,12 +34,9 @@ extern "C" int codegen_eval_expr(Node *node){
 	return 0;
 }
 
-extern "C" void codegen_dump(void) {
+extern "C" void codegen_dump(const char* output_path) {
 	std::error_code EC;
-	raw_fd_ostream out(
-		"build/canto.ll",
-		EC
-	);
+	raw_fd_ostream out(output_path, EC);
 
 	if (EC) {
         errs() << "Error opening file: "

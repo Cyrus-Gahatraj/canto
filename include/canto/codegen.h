@@ -11,7 +11,7 @@ extern "C" {
 	int codegen_eval_expr(Node* node);
 	void codegen_free(void);
 
-	void codegen_dump(void);
+	void codegen_dump(const char* output_path);
 	void codegen_set_symtable(SymTable *table);
 	void codegen_finalize(int ret);
 	void codegen_print_ir();

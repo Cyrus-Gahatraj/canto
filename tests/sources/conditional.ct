@@ -1,0 +1,39 @@
+~~
+  Conditional Precedence & Logic Test
+  
+  This test validates that the Canto compiler correctly handles:
+  1. Multi-branch 'if-or-else' statement selection.
+  2. The natural 'or' conditional chaining flow.
+  3. Precedence mixing of boolean logical operators ('and', 'or').
+  4. Proper evaluation of variable assignments tracking back to text output.
+~~
+
+~ Lines 1-2: "Shall I compare thee to a summer's day? 
+~              Thou art more lovely and more temperate:"
+~ We assign numerical weights to the beauty metrics of the subject.
+let lovely 10
+let temperate 10
+
+~ Lines 3-4: "Rough winds do shake the darling buds of May,
+~              And summer's lease hath all too short a date:"
+~ Setting up the environmental constants for our conditions.
+let rough_winds true
+let short_summer true
+
+~ The Sonnet Decision Engine:
+~ Validates Canto's structural condition tracking.
+if lovely > 5 and temperate > 5 and rough_winds {
+    ~ Expected Path: The internal logic evaluates true.
+    write "Thou art more lovely than a summer day"
+} or short_summer or lovely < 2 {
+    ~ Scaled Fallback: This block is bypassed because 'if' was satisfied.
+    write "And summer's lease hath all too short a date"
+} else {
+    ~ Ultimate Fallback: Bypassed.
+    write "But thy eternal summer shall not fade"
+}
+
+~~
+ Expected Terminal Output: 
+ Thou art more lovely than a summer day
+~~

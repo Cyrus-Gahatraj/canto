@@ -29,14 +29,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Run a .ct source file
-    ///
-    /// Loads editors.ct from the project root first,
-    /// then executes the given file.
+    /// Build a .ct source file to .ll
     ///
     /// Example:
-    ///   canto run src/main.ct
-    Run {
+    ///   canto build src/main.ct
+    Build {
         /// Path to the .ct file to execute
         path: String,
     },
@@ -48,9 +45,19 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     std::fs::create_dir_all("build")?;
     match &cli.command {
-        Some(Commands::Run { path }) => {
+        Some(Commands::Build { path }) => {
             let path: &Path = Path::new(path);
-            read_file(engine, path);
+
+            if path.extension().and_then(|ext| ext.to_str()) != Some("ct") {
+                eprintln!("Error: File must have a .ct extension");
+                std::process::exit(65);
+            }
+
+            let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("canto");
+            let output_ll = format!("build/{}.ll", file_stem);
+
+
+            read_file(engine, path, Path::new(&output_ll));
         },
         None => {
             run_repl(engine)?;
@@ -63,7 +70,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 /// Read and execute a .ct source file.
 /// Exits with code 65 on compile error (bad data format),
 /// or code 70 on runtime error (internal software error).
-fn read_file(engine: Engine, path: &Path) {
+fn read_file(engine: Engine, path: &Path, output_ll: &Path) {
     if path.extension().and_then(|ext| ext.to_str()) != Some("ct") {
        eprintln!("Error: File must have a .ct extension");
        return;
@@ -72,7 +79,7 @@ fn read_file(engine: Engine, path: &Path) {
     let source = std::fs::read_to_string(path)
         .expect("Could not read file — check the path and try again");
 
-    engine.run(&source, Option::Some(path));
+    engine.run(&source, Option::Some(path), Option::Some(output_ll));
 }
 
 /// Start an interactive REPL session.
@@ -99,7 +106,7 @@ fn run_repl(engine: Engine) -> io::Result<()> {
         if input == "exit"  { break    }
         if input.is_empty() { continue }
 
-        engine.run(input, Option::None);
+        engine.run(input, Option::None, Option::None);
     }
 
     println!("\nfarewell.");

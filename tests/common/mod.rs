@@ -1,9 +1,9 @@
-// tests/common/mod.rs
 use std::process::Command;
 use std::path::PathBuf;
 
 pub struct CantoTest {
     file_path: String,
+    ir_path: String,
     binary: PathBuf,
 }
 
@@ -22,18 +22,21 @@ impl CantoTest {
                 bin_path
             );
         }
-
         let path = "tests/sources/".to_owned() + filename; 
+
+        let base_name = filename.strip_suffix(".ct").unwrap_or(filename);
+        let ir_path = format!("build/{}.ll", base_name);
 
         Self {
             file_path: path,
+            ir_path,
             binary: bin_path,
         }
     }
 
     pub fn compile(&self) -> (bool, String) {
         let output = Command::new(&self.binary)
-            .arg("run")
+            .arg("build")
             .arg(&self.file_path)
             .output()
             .expect("Failed to execute Canto compiler binary");
@@ -44,10 +47,9 @@ impl CantoTest {
 
     pub fn run(&self) -> String {
         let interpreter = "lli";
-        let ir_path = "build/canto.ll"; 
 
         let output = Command::new(interpreter)
-            .arg(ir_path)
+            .arg(&self.ir_path)
             .output()
             .expect("Could not run lli. Be sure LLVM is installed.");
 
