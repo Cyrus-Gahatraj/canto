@@ -7,6 +7,8 @@
 #include <map>
 #include <string>
 #include <memory>
+#include <vector>
+#include <utility>
 
 using namespace llvm;
 
@@ -16,6 +18,9 @@ extern std::unique_ptr<IRBuilder<>> Builder;
 extern std::unique_ptr<Module>      TheModule;
 extern std::map<std::string, AllocaInst*> NamedValues;
 extern SymTable *TheSymtable;
+
+// loop-block stack: (continue target, break target)
+extern std::vector<std::pair<BasicBlock*, BasicBlock*>> LoopStack;
 
 // forward declarations
 Value* expr_gen(Node *node);

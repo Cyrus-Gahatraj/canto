@@ -24,12 +24,14 @@ AST_NODE(EDIT_PAIR,   "Edit Configuration Pair")
 AST_NODE(RELATIVE,    "Relative Context Operation (. op)")
 
 /* Control Flow Expressions */
-AST_NODE(IF,          "Conditional Expression (if)")
-AST_NODE(WHEN,        "Pattern Match Expression (when)")
-AST_NODE(WHEN_ARM,    "Pattern Match Arm")
+AST_NODE(IF,             "Conditional Expression (if)")
+AST_NODE(WHEN,           "Pattern Match Expression (when)")
+AST_NODE(WHEN_ARM,		 "Pattern Match Arm")
 AST_NODE(TRY_SCOPE,      "Try Scope Block")
 AST_NODE(OPTIONAL_DECL,  "Optional Declaration")
 AST_NODE(LOOP,			 "Loop statement")
+AST_NODE(CONTINUE,		 "Continue Statement")
+AST_NODE(BREAK,			 "Break Statement")
 AST_NODE(TYPE,           "Type Descriptor")
 
 /* Literal Leaves */

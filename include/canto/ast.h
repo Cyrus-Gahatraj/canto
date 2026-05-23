@@ -179,9 +179,17 @@ struct Node {
         } bool_lit;
 
 		struct {
-			Node* value;          /* NULL = bare return */
+			Node* value;          // NULL = bare return
 		} return_;
 
+		struct {
+			uint32_t label_sym;   // 0 = closest enclosing loop, otherwise symbol id 
+		} continue_;
+
+		struct {
+			uint32_t label_sym;   // 0 = closest enclosing loop, otherwise symbol id
+		} break_;
 	};
+	
 };
 

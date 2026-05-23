@@ -138,7 +138,12 @@ static Node* parse_expr(Parser* parser, Precedence prec) {
 
 	Node* left = rule.prefix(parser);
 	for(;;) {
-		skip_trivia(parser);
+		// skip only horizontal trivia — newlines terminate the expression
+		while (!check(parser, TK_LEX_EOF) &&
+		       (check(parser, TK_WHITESPACE)   ||
+		        check(parser, TK_LINE_COMMENT) ||
+		        check(parser, TK_BLOCK_COMMENT)))
+			next(parser);
 
 		TokenKind infix_kind = current(parser)->kind;
 		ParseRule infix_rule = parser->rules[infix_kind];
@@ -258,7 +263,13 @@ static Node* parse_write(Parser* parser) {
     node->write.count = 0;
 
     while (true) {
-        skip_trivia(parser);
+        // skip only horizontal trivia — newlines terminate the write statement
+        while (!check(parser, TK_LEX_EOF) &&
+               (check(parser, TK_WHITESPACE)   ||
+                check(parser, TK_LINE_COMMENT) ||
+                check(parser, TK_BLOCK_COMMENT)))
+            next(parser);
+
         TokenKind kind = current(parser)->kind;
 
         if (kind == TK_LEX_EOF   ||
@@ -469,6 +480,18 @@ static Node* parse_dot_dot_infix(Parser* parser, Node* left) {
     return node;
 }
 
+static Node* parse_continue(Parser* parser) {
+	Span start = current(parser)->span;
+	next(parser);
+	return make_node(parser, NODE_CONTINUE, start);
+}
+
+static Node* parse_break(Parser* parser) {
+	Span start = current(parser)->span;
+	next(parser);
+	return make_node(parser, NODE_BREAK, start);
+}
+
 static Node* parse_loop_stmt(Parser* parser) {
     Node* loop_node = make_node(parser, NODE_LOOP, (Span) {0, parser->cursor});
     loop_node->loop.cond       = NULL;
@@ -495,6 +518,8 @@ static Node* parse_stmt(Parser* parser) {
         case TK_KW_WRITE: return parse_write(parser);
 		case TK_KW_IF: next(parser); return parse_if_stmt(parser);
 	    case TK_KW_LOOP: next(parser); return parse_loop_stmt(parser);
+		case TK_KW_CONTINUE: return parse_continue(parser);
+		case TK_KW_BREAK: return parse_break(parser);
         case TK_LEX_EOF: return NULL;
         default:         return parse_expression(parser);
     }

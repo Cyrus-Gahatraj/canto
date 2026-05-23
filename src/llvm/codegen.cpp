@@ -7,6 +7,7 @@ using namespace llvm;
 
 extern "C" void codegen_init(void) {
 	NamedValues.clear();
+	LoopStack.clear();
 	TheContext = std::make_unique<LLVMContext>();
 	TheModule = std::make_unique<Module>("Canto", *TheContext);
 	Builder = std::make_unique<IRBuilder<>>(*TheContext);
@@ -56,6 +57,7 @@ extern "C" void codegen_free() {
 	TheModule.reset();
 	TheContext.reset();
 	NamedValues.clear();
+	LoopStack.clear();
 	TheSymtable = nullptr;
 }
 

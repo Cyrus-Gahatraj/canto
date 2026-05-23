@@ -20,6 +20,7 @@ write,      TK_KW_WRITE
 ask,        TK_KW_ASK
 loop,		TK_KW_LOOP
 continue,   TK_KW_CONTINUE
+break,		TK_KW_BREAK 
 return,     TK_KW_RETURN
 error,      TK_KW_ERROR
 try,        TK_KW_TRY
