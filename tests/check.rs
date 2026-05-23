@@ -19,3 +19,13 @@ fn edits_test() {
     );
 }
 
+#[test]
+fn loops_test() {
+    CantoTest::new("loops.ct").assert_output(
+r#"What did you dream?
+It's alright, we know what you dream
+Welcome my son
+Welcome to the machine"#
+    );
+}
+

@@ -1,0 +1,48 @@
+~~
+    Welcome To The Machine — Loop Flow Test
+
+    This test validates that the Canto compiler correctly handles:
+    1. 'if cond | loop' conditional execution.
+    2. 'or cond | loop' chained fallback loops.
+    3. Infinite 'loop' execution with manual breaking.
+~~
+
+let machine_on true
+let voices 2
+
+~ 1. Primary Conditional Loop Sequence
+if machine_on | loop {
+    write "What did you dream?"
+    break
+} or voices > 0 | loop {
+    voices.edit { . - 1 }
+}
+
+loop 1 {
+	write "It's alright, we know what you dream"
+}
+
+~ 2. Endless Industrial Pulse Sequence
+let pulse 0
+
+~ Replace 'if true | loop' with just 'loop'
+loop {
+	if pulse = 0 {
+		pulse.edit { . + 2 }
+		write "Welcome my son"
+		continue
+	} or pulse = 2 {
+			write "Welcome to the machine"
+	} else {
+        break
+    }
+    pulse.edit { . + 1 }
+}
+
+~~
+    Expected Terminal Output:
+	What did you dream?
+	It's alright, we know what you dream
+    Welcome to the machine
+    Welcome to the machine
+~~
