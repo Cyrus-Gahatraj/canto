@@ -124,6 +124,7 @@ struct Node {
 		struct {
 			struct Node** exprs;
 			uint32_t count;
+			uint32_t modifier_sym;
 		} write;
 
 		// let 
@@ -156,6 +157,10 @@ struct Node {
             Node*    type_ann;
             Node*    default_val;  // NULL = required
         } param;
+
+		struct {
+            uint32_t tk_type;
+        } keyword;
 
 		struct {
             uint32_t sym;

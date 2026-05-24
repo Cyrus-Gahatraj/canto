@@ -20,6 +20,7 @@ let b (7 - 9 * 4) % 8
 ~ Math: 20 + (-5) = 15.
 let c (a + b)
 
+write c
+
 ~ Final Output Verification: Emits the resulting value to stdout.
 ~ Expected Terminal Output: 15
-write c

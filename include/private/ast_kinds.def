@@ -34,6 +34,9 @@ AST_NODE(CONTINUE,		 "Continue Statement")
 AST_NODE(BREAK,			 "Break Statement")
 AST_NODE(TYPE,           "Type Descriptor")
 
+/* Keyword Reference (for keyword.edit) */
+AST_NODE(KEYWORD,     "Keyword Reference")
+
 /* Literal Leaves */
 AST_NODE(IDENT,       "Identifier")
 AST_NODE(INT_LIT,     "Integer Literal")

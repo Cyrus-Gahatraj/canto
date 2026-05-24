@@ -1,13 +1,17 @@
 #include "canto/codegen.h"
 #include "canto/ast.h"
+#include "canto/keyword_modifier.h"
 #include "context.hpp"
 #include <format>
 
 using namespace llvm;
 
+std::map<uint32_t, KeywordInstance*> KeywordModifiers;
+
 extern "C" void codegen_init(void) {
 	NamedValues.clear();
 	LoopStack.clear();
+	KeywordModifiers.clear();
 	TheContext = std::make_unique<LLVMContext>();
 	TheModule = std::make_unique<Module>("Canto", *TheContext);
 	Builder = std::make_unique<IRBuilder<>>(*TheContext);
@@ -58,6 +62,9 @@ extern "C" void codegen_free() {
 	TheContext.reset();
 	NamedValues.clear();
 	LoopStack.clear();
+	for (auto &kv : KeywordModifiers)
+		free_keyword_instance(kv.second);
+	KeywordModifiers.clear();
 	TheSymtable = nullptr;
 }
 

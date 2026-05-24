@@ -6,6 +6,37 @@ Value* stmt_gen(Node* node) {
 	switch (node->kind) {
 
 		case NODE_LET: {
+			if (node->let.value && node->let.value->kind == NODE_EDIT &&
+				node->let.value->edit.target->kind == NODE_KEYWORD) {
+				Node *edit_node = node->let.value;
+				uint32_t tk_type = edit_node->edit.target->keyword.tk_type;
+				KeywordMeta *meta = get_keyword_meta(tk_type);
+				if (meta) {
+					KeywordInstance *inst = create_keyword_instance(tk_type);
+					for (uint32_t i = 0; i < edit_node->edit.pair_count; i++) {
+						Node *pair = edit_node->edit.pairs[i];
+						std::string attr_name;
+						if (pair->edit_pair.field_sym != 0) {
+							const Symbol *s = &TheSymtable->syms[pair->edit_pair.field_sym];
+							attr_name = std::string(s->start, s->length);
+						} else if (meta->attr_count > 0) {
+							attr_name = meta->attributes[0].name;
+						}
+						if (attr_name.empty()) continue;
+						if (pair->edit_pair.value->kind == NODE_STRING_LIT) {
+							const Symbol *s = &TheSymtable->syms[pair->edit_pair.value->string_lit.sym];
+							std::string val(s->start, s->length);
+							apply_keyword_edit(inst, attr_name.c_str(), val.c_str());
+						} else if (pair->edit_pair.value->kind == NODE_IDENT) {
+							const Symbol *s = &TheSymtable->syms[pair->edit_pair.value->ident.sym];
+							std::string val(s->start, s->length);
+							apply_keyword_edit(inst, attr_name.c_str(), val.c_str());
+						}
+					}
+					KeywordModifiers[node->let.name_sym] = inst;
+				}
+				return ConstantInt::get(Builder->getInt32Ty(), 0);
+			}
 			Value* val = expr_gen(node->let.value);
 			if(!val) return nullptr;
 
@@ -39,6 +70,15 @@ Value* stmt_gen(Node* node) {
 						 Function::ExternalLinkage,
 						 "printf",
 						 TheModule.get());
+			 }
+
+			 const char *end_str = "\n";
+			 if (node->write.modifier_sym != 0) {
+				 auto it = KeywordModifiers.find(node->write.modifier_sym);
+				 if (it != KeywordModifiers.end()) {
+					 const char *val = get_keyword_attr(it->second, "end");
+					 if (val) end_str = val;
+				 }
 			 }
 
 			 for (uint32_t i = 0; i < node->write.count; i++) {
@@ -82,7 +122,7 @@ Value* stmt_gen(Node* node) {
 				 }
 			 }
 
-			 Value *newline = Builder->CreateGlobalStringPtr("\n", "newline");
+			 Value *newline = Builder->CreateGlobalStringPtr(end_str, "write_end");
 			 Builder->CreateCall(printf_fn, { newline });
 			 return ConstantInt::get(Builder->getInt32Ty(), 0);
 		}
@@ -158,9 +198,60 @@ Value* stmt_gen(Node* node) {
 		case NODE_EDIT: {
 			Node *target = node->edit.target;
 
+			if (target->kind == NODE_KEYWORD) {
+				uint32_t tk_type = target->keyword.tk_type;
+
+				KeywordMeta *meta = get_keyword_meta(tk_type);
+				if (!meta) {
+					fprintf(stderr, "codegen: unknown keyword type for edit\n");
+					return nullptr;
+				}
+
+				Symbol kw_sym;
+				kw_sym.start  = meta->name;
+				kw_sym.length = strlen(meta->name);
+				symtable_hash(&kw_sym);
+				SymId kw_id = intern_symbol(TheSymtable, &kw_sym);
+
+				auto it = KeywordModifiers.find(kw_id);
+				KeywordInstance *inst;
+				if (it != KeywordModifiers.end()) {
+					inst = it->second;
+				} else {
+					inst = create_keyword_instance(tk_type);
+					KeywordModifiers[kw_id] = inst;
+				}
+
+				for (uint32_t i = 0; i < node->edit.pair_count; i++) {
+					Node *pair = node->edit.pairs[i];
+
+					std::string attr_name;
+					if (pair->edit_pair.field_sym != 0) {
+						const Symbol *s = &TheSymtable->syms[pair->edit_pair.field_sym];
+						attr_name = std::string(s->start, s->length);
+					} else if (meta->attr_count > 0) {
+						attr_name = meta->attributes[0].name;
+					}
+
+					if (attr_name.empty()) continue;
+
+					if (pair->edit_pair.value->kind == NODE_STRING_LIT) {
+						const Symbol *s = &TheSymtable->syms[pair->edit_pair.value->string_lit.sym];
+						std::string val(s->start, s->length);
+						apply_keyword_edit(inst, attr_name.c_str(), val.c_str());
+					} else if (pair->edit_pair.value->kind == NODE_IDENT) {
+						const Symbol *s = &TheSymtable->syms[pair->edit_pair.value->ident.sym];
+						std::string val(s->start, s->length);
+						apply_keyword_edit(inst, attr_name.c_str(), val.c_str());
+					}
+				}
+
+				return ConstantInt::get(Builder->getInt32Ty(), 0);
+			}
+
 			// resolve the target alloca 
 			if (target->kind != NODE_IDENT) {
-				fprintf(stderr, "codegen: edit target must be identifier (design fields coming later)\n");
+				fprintf(stderr, "codegen: edit target must be identifier or keyword\n");
 				return nullptr;
 			}
 

@@ -1,5 +1,5 @@
-use std::process::Command;
 use std::path::PathBuf;
+use std::process::Command;
 
 pub struct CantoTest {
     file_path: String,
@@ -8,13 +8,12 @@ pub struct CantoTest {
 }
 
 impl CantoTest {
-
     pub fn new(filename: &str) -> Self {
         let mut bin_path_str = String::from("./target/debug/canto");
         if cfg!(target_os = "windows") {
             bin_path_str += ".exe";
         }
-        
+
         let bin_path = PathBuf::from(bin_path_str);
         if !bin_path.exists() {
             panic!(
@@ -22,7 +21,7 @@ impl CantoTest {
                 bin_path
             );
         }
-        let path = "tests/sources/".to_owned() + filename; 
+        let path = "tests/sources/".to_owned() + filename;
 
         let base_name = filename.strip_suffix(".ct").unwrap_or(filename);
         let ir_path = format!("build/{}.ll", base_name);
@@ -40,7 +39,7 @@ impl CantoTest {
             .arg(&self.file_path)
             .output()
             .expect("Failed to execute Canto compiler binary");
-        
+
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
         (output.status.success(), stderr)
     }
@@ -58,19 +57,18 @@ impl CantoTest {
 
     pub fn assert_output(&self, expected_output: &str) {
         let (compile_success, stderr) = self.compile();
-        
+
         assert!(
-            compile_success, 
-            "Could not compile the file: {}\nDiagnostic:\n{}", 
-            self.file_path, 
-            stderr
+            compile_success,
+            "Could not compile the file: {}\nDiagnostic:\n{}",
+            self.file_path, stderr
         );
 
         let program_output = self.run();
         assert_eq!(
-            program_output.trim(), 
+            program_output.trim(),
             expected_output.trim(),
-            "\nRuntime output mismatch for file: {}\n", 
+            "\nRuntime output mismatch for file: {}\n",
             self.file_path
         );
     }

@@ -1,0 +1,20 @@
+~~
+Keyword Modifier Edit Blocks
+
+This test validates that keyword modifiers via .edit syntax work.
+When a custom .end attribute is set on a write modifier, the modified
+version uses that end string instead of the default newline.
+
+  let Writef write.edit { .end: "" }
+
+The PascalCase name distinguishes keyword modifier bindings from
+regular variables. Invocations like `Writef "text"` use the custom
+end string, while default `write "text"` continues to use "\n".
+~~
+
+let Writef write.edit { .end: "" }
+
+Writef "hello "
+write "world"
+
+~ Expected Terminal Output: hello world

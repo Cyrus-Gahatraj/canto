@@ -136,6 +136,12 @@ Value* expr_gen(Node* node) {
 		case NODE_GROUP:
             return expr_gen(node->group.expr);
 
+		case NODE_KEYWORD:
+			return ConstantInt::get(Builder->getInt32Ty(), 0);
+
+		case NODE_EDIT:
+			return stmt_gen(node);
+
 		default:
 			fprintf(stderr, "Codegen Error: Unhandled node kind %d\n", node->kind);
 			return nullptr;

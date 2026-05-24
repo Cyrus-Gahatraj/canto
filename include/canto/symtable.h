@@ -1,6 +1,10 @@
 #pragma once
 #include "common.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define FNV_OFFSET  0x811c9dc5u
 #define FNV_PRIME   0x01000193u
 #define EMPTY_SLOT  0xFFFFFFFFu
@@ -35,4 +39,8 @@ void symtable_init(SymTable* table);
 void symtable_free(SymTable* table);
 void symtable_hash(Symbol* symbol);
 SymId intern_symbol(SymTable* table, Symbol* symbol);
+
+#ifdef __cplusplus
+}
+#endif
 

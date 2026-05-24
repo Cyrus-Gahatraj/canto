@@ -290,6 +290,11 @@ static void string(Lexer* lexer, DiagEngine* diags) {
                                              : &sym);
                 str.sym      = intern_symbol(&lexer->symbols, &sym);
                 append_token(lexer, str);
+            } else {
+                Symbol sym = { .start = "", .length = 0 };
+                Token  tk  = create_token(lexer, TK_STRING_LIT, TOKEN_FLAG_NONE);
+                tk.sym     = intern_symbol(&lexer->symbols, &sym);
+                append_token(lexer, tk);
             }
             next(lexer);
             return;

@@ -31,6 +31,9 @@ permissions.edit {
 let parent_dir "usr"
 let current_dir "var"
 
+write "Accessing: /`parent_dir`/`current_dir`/script.sh"
+write "Security Mask: `permissions`"
+
 ~~
  Expected Terminal Output:
 
@@ -38,5 +41,3 @@ let current_dir "var"
  Security Mask: 700
 ~~
 
-write "Accessing: /`parent_dir`/`current_dir`/script.sh"
-write "Security Mask: `permissions`"

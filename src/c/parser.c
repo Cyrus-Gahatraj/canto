@@ -24,6 +24,8 @@ static Node* parse_dot_prefix    (Parser* parser);
 static Node* parse_dot_infix     (Parser* parser, Node* left);
 static Node* parse_dot_dot_infix (Parser* parser, Node* left);
 static Node* parse_edit          (Parser* parser, Node* target);
+static Node* parse_keyword_ref   (Parser* parser);
+static Node* parse_var_write     (Parser* parser, uint32_t name_sym, Span start);
 
 static const ParseRule global_rules[TK_COUNT] = {
 	// identifier
@@ -63,6 +65,9 @@ static const ParseRule global_rules[TK_COUNT] = {
 	// string
 	[TK_STRING_LIT] = { parse_string, NULL, PREC_NONE },
 
+	// Keywords as expressions (for keyword.edit)
+	[TK_KW_WRITE] = { parse_keyword_ref, NULL, PREC_NONE },
+	[TK_KW_TYPE]  = { parse_keyword_ref, NULL, PREC_NONE },
 
 	// Dot
 	[TK_DOT]     = { parse_dot_prefix, parse_dot_infix, PREC_CALL },
@@ -185,6 +190,13 @@ static Node* parse_bool(Parser* parser) {
 	return node;
 }
 
+static Node* parse_keyword_ref(Parser* parser) {
+	Token tk = next(parser);
+	Node* node = make_node(parser, NODE_KEYWORD, tk.span);
+	node->keyword.tk_type = tk.kind;
+	return node;
+}
+
 static Node* parse_ident(Parser* parser) {
 	Token tk = next(parser);
 	Node* node = make_node(parser, NODE_IDENT, tk.span);
@@ -245,12 +257,22 @@ static Node* parse_let_declaration(Parser* parser) {
 	skip_trivia(parser);
 	Node* value = parse_expression(parser);
 	
-	Node* node = make_node(parser, NODE_LET, start);
+    Node* node = make_node(parser, NODE_LET, start);
 	node->let.is_fn = false;
 	node->let.name_sym = ident_tk.sym;
 	node->let.type_ann = type_ann;
 	node->let.value = value;
-	
+
+	if (value && value->kind == NODE_EDIT && value->edit.target->kind == NODE_KEYWORD) {
+		char first = parser->map->source_buffer[ident_tk.span.start];
+		if (!(first >= 'A' && first <= 'Z')) {
+			append_diag(parser->diags,
+			            "keyword modifier binding name must start with an uppercase letter (PascalCase).",
+			            ident_tk.span, DIAG_PHASE_PARSE, DIAG_ERROR);
+			parser->had_error = true;
+		}
+	}
+
 	return node;
 }
 
@@ -261,9 +283,52 @@ static Node* parse_write(Parser* parser) {
     Node *node = make_node(parser, NODE_WRITE, start);
     node->write.exprs = malloc(sizeof(Node*) * 64);
     node->write.count = 0;
+    node->write.modifier_sym = 0;
 
     while (true) {
         // skip only horizontal trivia — newlines terminate the write statement
+        while (!check(parser, TK_LEX_EOF) &&
+               (check(parser, TK_WHITESPACE)   ||
+                check(parser, TK_LINE_COMMENT) ||
+                check(parser, TK_BLOCK_COMMENT)))
+            next(parser);
+
+        TokenKind kind = current(parser)->kind;
+
+        if (kind == TK_LEX_EOF   ||
+            kind == TK_SEMICOLON ||
+            kind == TK_NEWLINE   ||
+            kind == TK_RBRACE)
+            break;
+
+        if (kind == TK_COMMA) { next(parser); continue; }
+
+        if (kind == TK_KW_WRITE  ||
+            kind == TK_KW_LET    ||
+            kind == TK_KW_IF     ||
+            kind == TK_KW_LOOP   ||
+            kind == TK_KW_RETURN)
+            break;
+
+        Node *arg = parse_expression(parser);
+        if (arg)
+            node->write.exprs[node->write.count++] = arg;
+        else
+            break;
+    }
+
+    return node;
+}
+
+static Node* parse_var_write(Parser* parser, uint32_t name_sym, Span start) {
+    next(parser); // consume the identifier token
+
+    Node *node = make_node(parser, NODE_WRITE, start);
+    node->write.exprs = malloc(sizeof(Node*) * 64);
+    node->write.count = 0;
+    node->write.modifier_sym = name_sym;
+
+    while (true) {
         while (!check(parser, TK_LEX_EOF) &&
                (check(parser, TK_WHITESPACE)   ||
                 check(parser, TK_LINE_COMMENT) ||
@@ -415,8 +480,27 @@ static Node* parse_edit(Parser* parser, Node* target) {
                 pair->edit_pair.is_parent = false;
             }
 
+        } else if (check(parser, TK_IDENT)) {
+            uint32_t saved = parser->cursor;
+            next(parser);
+            skip_trivia(parser);
+            bool has_colon = check(parser, TK_COLON);
+            parser->cursor = saved;
+
+            if (has_colon) {
+                Token field = next(parser);
+                skip_trivia(parser);
+                next(parser); // consume ':'
+                skip_trivia(parser);
+                pair->edit_pair.field_sym  = field.sym;
+                pair->edit_pair.value      = parse_expression(parser);
+                pair->edit_pair.is_parent  = false;
+            } else {
+                pair->edit_pair.field_sym = 0;
+                pair->edit_pair.value     = parse_expression(parser);
+                pair->edit_pair.is_parent = false;
+            }
         } else {
-            // plain value — absolute set on scalar variable 
             pair->edit_pair.field_sym = 0;
             pair->edit_pair.value     = parse_expression(parser);
             pair->edit_pair.is_parent = false;
@@ -521,7 +605,28 @@ static Node* parse_stmt(Parser* parser) {
 		case TK_KW_CONTINUE: return parse_continue(parser);
 		case TK_KW_BREAK: return parse_break(parser);
         case TK_LEX_EOF: return NULL;
-        default:         return parse_expression(parser);
+        default: {
+            if (check(parser, TK_IDENT)) {
+                Token id_tk  = *current(parser);
+                uint32_t saved = parser->cursor;
+                next(parser);
+                skip_trivia(parser);
+                bool var_write = !check(parser, TK_LEX_EOF) &&
+                                 !check(parser, TK_NEWLINE) &&
+                                 !check(parser, TK_SEMICOLON) &&
+                                 !check(parser, TK_RBRACE) &&
+                                 !check(parser, TK_RPAREN) &&
+                                 !check(parser, TK_COMMA) &&
+                                 !check(parser, TK_DOT) &&
+                                 !check(parser, TK_DOT_DOT) &&
+                                 !check(parser, TK_EQUAL) &&
+                                 parser->rules[current(parser)->kind].prefix != NULL;
+                parser->cursor = saved;
+                if (var_write)
+                    return parse_var_write(parser, id_tk.sym, id_tk.span);
+            }
+            return parse_expression(parser);
+        }
     }
 }
 
