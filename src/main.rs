@@ -41,9 +41,8 @@ enum Commands {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
-    let engine = Engine::new();
-
     std::fs::create_dir_all("build")?;
+
     match &cli.command {
         Some(Commands::Build { path }) => {
             let path: &Path = Path::new(path);
@@ -56,11 +55,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("canto");
             let output_ll = format!("build/{}.ll", file_stem);
 
-
-            read_file(engine, path, Path::new(&output_ll));
+            let mut engine = Engine::new(false);
+            read_file(&mut engine, path, Path::new(&output_ll))?;
         },
         None => {
-            run_repl(engine)?;
+            let mut engine = Engine::new(true);
+            run_repl(&mut engine)?;
         }
     }
 
@@ -70,27 +70,26 @@ fn main() -> Result<(), Box<dyn Error>> {
 /// Read and execute a .ct source file.
 /// Exits with code 65 on compile error (bad data format),
 /// or code 70 on runtime error (internal software error).
-fn read_file(engine: Engine, path: &Path, output_ll: &Path) {
-    if path.extension().and_then(|ext| ext.to_str()) != Some("ct") {
-       eprintln!("Error: File must have a .ct extension");
-       return;
-    }
-
+fn read_file(engine: &mut Engine, path: &Path, output_ll: &Path) -> Result<(), Box<dyn Error>> {
     let source = std::fs::read_to_string(path)
-        .expect("Could not read file — check the path and try again");
+        .map_err(|e| {
+            eprintln!("Could not read file — check the path and try again");
+            e
+        })?;
 
-    engine.run(&source, Option::Some(path), Option::Some(output_ll));
+    engine.run(&source, Some(path), Some(output_ll));
+    Ok(())
 }
 
 /// Start an interactive REPL session.
 ///
 /// Type Canto expressions line by line and see results immediately.
 /// Type `exit` or send EOF (Ctrl+D) to quit.
-fn run_repl(engine: Engine) -> io::Result<()> {
+fn run_repl(engine: &mut Engine) -> io::Result<()> {
     println!("Canto 0.1.0 — type 'exit' to exit");
     println!("────────────────────────────────────────────");
 
-    let mut line  = String::new();
+    let mut line = String::new();
     let stdin = io::stdin();
 
     loop {
@@ -98,15 +97,14 @@ fn run_repl(engine: Engine) -> io::Result<()> {
         io::stdout().flush()?;
 
         line.clear();
-
-        if stdin.read_line(&mut line)? == 0 { break }
+        if stdin.read_line(&mut line)? == 0 { break; }
 
         let input = line.trim();
+        if input == "exit" { break; }
+        if input.is_empty() { continue; }
 
-        if input == "exit"  { break    }
-        if input.is_empty() { continue }
-
-        engine.run(input, Option::None, Option::None);
+        // State successfully alters raw_ctx step by step!
+        engine.run(input, None, None);
     }
 
     println!("\nfarewell.");
