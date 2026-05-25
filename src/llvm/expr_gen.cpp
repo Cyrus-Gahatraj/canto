@@ -6,7 +6,7 @@ Value* expr_gen(Node* node) {
 
 	switch(node->kind) {
 		case NODE_IDENT: {
-			std::string key = "var_" + std::to_string(node->ident.sym);
+			std::string key = sym_name(node->ident.sym);
 
 			auto it = NamedValues.find(key);
 			if (it == NamedValues.end()) {
@@ -139,6 +139,7 @@ Value* expr_gen(Node* node) {
 		case NODE_KEYWORD:
 			return ConstantInt::get(Builder->getInt32Ty(), 0);
 
+		case NODE_CALL:
 		case NODE_EDIT:
 			return stmt_gen(node);
 

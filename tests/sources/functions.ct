@@ -1,0 +1,46 @@
+~~
+    Function Declaration and Calculator Flow Test
+
+    This test validates that the Canto compiler correctly handles:
+    1. Function declarations using `let name(params) {}`.
+    2. Function invocation with positional arguments.
+    3. Explicit `return` value propagation.
+    4. Nested function composition.
+    5. Variable tracking through arithmetic expressions.
+    6. Conditional execution inside functions.
+~~
+
+let add(a, b) {
+    return a + b
+}
+
+let multiply(a, b) {
+    return a * b
+}
+
+let square(x) {
+    return multiply(x, x)
+}
+
+~ Pythagorean theorem:
+~ c² = a² + b²
+
+let pythagorus(a, b) {
+    let a2 square(a)
+    let b2 square(b)
+
+    return add(a2, b2)
+}
+
+let side_a 3
+let side_b 4
+
+let result pythagorus(side_a, side_b)
+
+write result
+
+~~
+Expected Terminal Output: 25
+~~
+
+

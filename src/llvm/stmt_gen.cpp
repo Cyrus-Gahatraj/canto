@@ -45,7 +45,7 @@ Value* stmt_gen(Node* node) {
 			IRBuilder<> entry(&fn->getEntryBlock(),
 							fn->getEntryBlock().begin());
 
-			std::string var_name = "var_" + std::to_string(node->let.name_sym);
+			std::string var_name = sym_name(node->let.name_sym);
 			AllocaInst* slot = entry.CreateAlloca(
 				val->getType(),
 				nullptr,
@@ -195,6 +195,121 @@ Value* stmt_gen(Node* node) {
 			return ConstantInt::get(Builder->getInt32Ty(), 0);
 		}
 
+		case NODE_FN: {
+			std::string name = sym_name(node->fn.name_sym);
+
+			// build parameter types 
+			std::vector<Type*> param_types;
+			for (uint32_t i = 0; i < node->fn.param_count; i++) {
+				// default to i64 — type inference comes later 
+				param_types.push_back(Type::getInt64Ty(*TheContext));
+			}
+
+			// return type — default i64 
+			Type *ret_type = Type::getInt64Ty(*TheContext);
+
+			FunctionType* ft = FunctionType::get(ret_type, param_types, false);
+			Function* fn = Function::Create(
+				ft, Function::ExternalLinkage, name, TheModule.get());
+
+			// name the parameters 
+			uint32_t idx = 0;
+			for (auto &arg : fn->args()) {
+				arg.setName(sym_name(node->fn.params[idx]->param.name_sym));
+				idx++;
+			}
+
+			// save and switch insert point
+			BasicBlock *saved_bb = Builder->GetInsertBlock();
+
+			BasicBlock *entry = BasicBlock::Create(*TheContext, "entry", fn);
+			Builder->SetInsertPoint(entry);
+
+			// allocate each parameter on the stack 
+			idx = 0;
+			for (auto &arg : fn->args()) {
+				std::string pname = std::string(arg.getName());
+				AllocaInst *slot  = Builder->CreateAlloca(
+					arg.getType(), nullptr, pname);
+				Builder->CreateStore(&arg, slot);
+				NamedValues[pname] = slot;
+				idx++;
+			}
+
+			// generate body
+			stmt_gen(node->fn.body);
+
+			// add implicit return 0 if no terminator
+			if (!Builder->GetInsertBlock()->getTerminator())
+				Builder->CreateRet(ConstantInt::get(ret_type, 0));
+
+			// restore insert point to caller
+			if (saved_bb)
+				Builder->SetInsertPoint(saved_bb);
+
+			return ConstantInt::get(Builder->getInt32Ty(), 0);
+		}
+
+		case NODE_CALL: {
+			if (node->call.callee->kind != NODE_IDENT) {
+				fprintf(stderr, "codegen: call target must be identifier\n");
+				return nullptr;
+			}
+
+			std::string name = sym_name(node->call.callee->ident.sym);
+			Function   *fn   = TheModule->getFunction(name);
+
+			if (!fn) {
+				fprintf(stderr, "codegen: undefined function '%s'\n", name.c_str());
+				return nullptr;
+			}
+
+			if (fn->arg_size() != node->call.arg_count) {
+				fprintf(stderr, "codegen: '%s' expects %zu args, got %u\n",
+						name.c_str(), fn->arg_size(), node->call.arg_count);
+				return nullptr;
+			}
+
+			std::vector<Value*> args;
+			for (uint32_t i = 0; i < node->call.arg_count; i++) {
+				Value *v = expr_gen(node->call.args[i]);
+				if (!v) return nullptr;
+				args.push_back(v);
+			}
+
+			return Builder->CreateCall(fn, args, "call_" + name);
+		}
+
+		case NODE_RETURN: {
+			if (node->return_.value) {
+				Value *val = expr_gen(node->return_.value);
+				if (!val) return nullptr;
+
+				// get the function's return type and cast if needed
+				Function *fn      = Builder->GetInsertBlock()->getParent();
+				Type     *ret_ty  = fn->getReturnType();
+
+				if (val->getType() != ret_ty) {
+					if (ret_ty->isDoubleTy() && val->getType()->isIntegerTy())
+						val = Builder->CreateSIToFP(val, ret_ty);
+					else if (ret_ty->isIntegerTy() && val->getType()->isDoubleTy())
+						val = Builder->CreateFPToSI(val, ret_ty);
+					else
+						val = Builder->CreateIntCast(val, ret_ty, true);
+				}
+
+				Builder->CreateRet(val);
+			} else {
+				Builder->CreateRetVoid();
+			}
+
+			// unreachable block for code after return
+			Function   *fn   = Builder->GetInsertBlock()->getParent();
+			BasicBlock *dead = BasicBlock::Create(*TheContext, "dead", fn);
+			Builder->SetInsertPoint(dead);
+			return ConstantInt::get(Builder->getInt32Ty(), 0);
+		}
+
 		case NODE_EDIT: {
 			Node *target = node->edit.target;
 
@@ -255,7 +370,7 @@ Value* stmt_gen(Node* node) {
 				return nullptr;
 			}
 
-			std::string name = "var_" + std::to_string(target->ident.sym);
+			std::string name = sym_name(target->ident.sym);
 			auto it = NamedValues.find(name);
 			if (it == NamedValues.end()) {
 				fprintf(stderr, "codegen: undefined variable '%s' in edit\n",

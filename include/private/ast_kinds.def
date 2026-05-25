@@ -1,7 +1,8 @@
 
 /* Structural & Statements */
 AST_NODE(PROGRAM,     "Program Root")
-AST_NODE(LET,         "Variable/Function Binding")
+AST_NODE(LET,         "Variable Binding")
+AST_NODE(FN,          "Function Binding")
 AST_NODE(WRITE,       "Write statement")
 AST_NODE(DESIGN,      "Design Declaration")
 AST_NODE(FIELD,       "Design Field")

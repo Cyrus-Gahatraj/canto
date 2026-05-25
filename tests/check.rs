@@ -27,7 +27,11 @@ Welcome to the machine"#,
 }
 
 #[test]
+fn functions_test() {
+    CantoTest::new("functions.ct").assert_output("25");
+}
+
+#[test]
 fn keyword_modifiers_test() {
     CantoTest::new("keyword_modifiers.ct").assert_output("hello world");
 }
-

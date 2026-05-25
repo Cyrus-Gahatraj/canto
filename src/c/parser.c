@@ -20,12 +20,15 @@ static Node* parse_let_declaration(Parser* parser);
 static Node* parse_block(Parser* parser);
 static Node* parse_if_stmt(Parser* parser);
 static Node* parse_string(Parser* parser);
-static Node* parse_dot_prefix    (Parser* parser);
-static Node* parse_dot_infix     (Parser* parser, Node* left);
-static Node* parse_dot_dot_infix (Parser* parser, Node* left);
-static Node* parse_edit          (Parser* parser, Node* target);
-static Node* parse_keyword_ref   (Parser* parser);
-static Node* parse_var_write     (Parser* parser, uint32_t name_sym, Span start);
+static Node* parse_dot_prefix(Parser* parser);
+static Node* parse_dot_infix(Parser* parser, Node* left);
+static Node* parse_dot_dot_infix(Parser* parser, Node* left);
+static Node* parse_edit(Parser* parser, Node* target);
+static Node* parse_param(Parser* parser);
+static Node* parse_return(Parser* parser);
+static Node* parse_call(Parser* parser, Node* left);
+static Node* parse_keyword_ref(Parser* parser);
+static Node* parse_var_write(Parser* parser, uint32_t name_sym, Span start);
 
 static const ParseRule global_rules[TK_COUNT] = {
 	// identifier
@@ -43,7 +46,7 @@ static const ParseRule global_rules[TK_COUNT] = {
     [TK_PERCENTAGE] = { NULL, parse_binary, PREC_FACTOR },
 
 	// Grouping
-	[TK_LPAREN]     = { parse_grouping, NULL, PREC_CALL },
+	[TK_LPAREN]     = { parse_grouping, parse_call, PREC_CALL },
 	[TK_RPAREN]     = { NULL, NULL, PREC_NONE },	 // RPAREN don't need grouping
 	[TK_PIPE]       = { NULL, NULL, PREC_NONE },
 
@@ -241,39 +244,176 @@ static Node* parse_binary(Parser* parser, Node* left) {
 	return node;
 }
 
+static Node* parse_param(Parser* parser) {
+    Span start = current(parser)->span;
+    Token name = expect_token(parser, TK_IDENT,
+                     "expected parameter name");
+    skip_trivia(parser);
+
+    Node *type_ann = NULL;
+    if (match(parser, TK_COLON)) {
+        Token type_tk = expect_token(parser, TK_IDENT,
+                            "expected type name after ':'");
+        type_ann = make_node(parser, NODE_IDENT, type_tk.span);
+        type_ann->ident.sym = type_tk.sym;
+    }
+
+    Node *param = make_node(parser, NODE_PARAM, start);
+    param->param.name_sym    = name.sym;
+    param->param.type_ann    = type_ann;
+    param->param.default_val = NULL;
+    return param;
+}
+
 static Node* parse_let_declaration(Parser* parser) {
-	Span start = current(parser)->span;
-	next(parser);
-	skip_trivia(parser);
+    Span start = current(parser)->span;
+    next(parser);           // consume 'let' 
+    skip_trivia(parser);
 
-	Token ident_tk = expect_token(parser, TK_IDENT, "expected variable name after 'let'.");
-	Node* type_ann = NULL;
+    Token name = expect_token(parser, TK_IDENT,
+                     "expected name after 'let'");
+    skip_trivia(parser);
 
-	if (match(parser, TK_COLON)) {
-		Token type_tk = expect_token(parser, TK_IDENT, "expected type name after ':'.");
-		type_ann = make_node(parser, NODE_IDENT, type_tk.span);
-		type_ann->ident.sym = type_tk.sym;
-	}
-	skip_trivia(parser);
-	Node* value = parse_expression(parser);
-	
-    Node* node = make_node(parser, NODE_LET, start);
-	node->let.is_fn = false;
-	node->let.name_sym = ident_tk.sym;
-	node->let.type_ann = type_ann;
-	node->let.value = value;
+    // ── function: let name(params) { body }
+    // Scan ahead: if (...) is followed by {, it's a function definition.
+    // Otherwise (e.g. let a (5)) it's a regular let with parenthesized expr.
+    bool is_fn = false;
+    if (check(parser, TK_LPAREN)) {
+        uint32_t saved = parser->cursor;
+        next(parser);
+        int depth = 0;
+        while (!check(parser, TK_LEX_EOF)) {
+            if (check(parser, TK_LPAREN)) depth++;
+            if (check(parser, TK_RPAREN) && depth-- == 0) break;
+            next(parser);
+        }
+        if (check(parser, TK_RPAREN)) {
+            next(parser);
+            skip_trivia(parser);
+            is_fn = check(parser, TK_LBRACE);
+        }
+        parser->cursor = saved;
+    }
 
-	if (value && value->kind == NODE_EDIT && value->edit.target->kind == NODE_KEYWORD) {
-		char first = parser->map->source_buffer[ident_tk.span.start];
-		if (!(first >= 'A' && first <= 'Z')) {
-			append_diag(parser->diags,
-			            "keyword modifier binding name must start with an uppercase letter (PascalCase).",
-			            ident_tk.span, DIAG_PHASE_PARSE, DIAG_ERROR);
-			parser->had_error = true;
-		}
-	}
+    if (is_fn) {
+        next(parser);       // consume ( 
+        skip_trivia(parser);
 
-	return node;
+        Node  **params = NULL;
+        uint32_t count = 0, cap = 0;
+
+        while (!check(parser, TK_RPAREN) && !check(parser, TK_LEX_EOF) && !parser->had_error) {
+            skip_trivia(parser);
+            Node *p = parse_param(parser);
+            if (!p) break;
+
+            if (count >= cap) {
+                cap    = cap ? cap * 2 : 4;
+                params = realloc(params, cap * sizeof(Node*));
+            }
+            params[count++] = p;
+
+            skip_trivia(parser);
+            match(parser, TK_COMMA);
+            skip_trivia(parser);
+        }
+        expect_token(parser, TK_RPAREN, "expected ')' after parameters");
+        skip_trivia(parser);
+
+        // optional return type: let f(x: Int): Int { }
+        Node *return_type = NULL;
+        if (match(parser, TK_COLON)) {
+            Token rt = expect_token(parser, TK_IDENT,
+                           "expected return type after ':'");
+            return_type = make_node(parser, NODE_IDENT, rt.span);
+            return_type->ident.sym = rt.sym;
+        }
+        skip_trivia(parser);
+
+        expect_token(parser, TK_LBRACE, "expected '{' for function body");
+        Node *body = parse_block(parser);
+
+        Node *fn = make_node(parser, NODE_FN, start);
+        fn->fn.name_sym    = name.sym;
+        fn->fn.params      = params;
+        fn->fn.param_count = count;
+        fn->fn.body        = body;
+        fn->fn.return_type = return_type;
+        return fn;
+    }
+
+    skip_trivia(parser);
+
+    Node *type_ann = NULL;
+    if (match(parser, TK_COLON)) {
+        skip_trivia(parser);
+        Token type_tk = expect_token(parser, TK_IDENT,
+                            "expected type name after ':'");
+        type_ann = make_node(parser, NODE_IDENT, type_tk.span);
+        type_ann->ident.sym = type_tk.sym;
+        skip_trivia(parser);
+    }
+
+    Node *value = parse_expression(parser);
+
+    Node *node = make_node(parser, NODE_LET, start);
+    node->let.name_sym = name.sym;
+    node->let.type_ann = type_ann;
+    node->let.value    = value;
+    node->let.is_fn    = false;
+    return node;
+}
+
+static Node* parse_call(Parser* parser, Node* left) {
+    Span start = current(parser)->span;
+    next(parser);           // consume (
+    skip_trivia(parser);
+
+    Node  **args = NULL;
+    uint32_t count = 0, cap = 0;
+
+    while (!check(parser, TK_RPAREN) && !check(parser, TK_LEX_EOF)) {
+        skip_trivia(parser);
+        Node *arg = parse_expression(parser);
+        if (!arg) break;
+
+        if (count >= cap) {
+            cap  = cap ? cap * 2 : 4;
+            args = realloc(args, cap * sizeof(Node*));
+        }
+        args[count++] = arg;
+
+        skip_trivia(parser);
+        if (!match(parser, TK_COMMA)) break;
+        skip_trivia(parser);
+    }
+
+    expect_token(parser, TK_RPAREN, "expected ')' after arguments");
+
+    Node *node = make_node(parser, NODE_CALL, start);
+    node->call.callee    = left;
+    node->call.args      = args;
+    node->call.arg_count = count;
+    return node;
+}
+
+static Node* parse_return(Parser* parser) {
+    Span start = current(parser)->span;
+    next(parser);           // consume 'return'
+    skip_trivia(parser);
+
+    Node *value = NULL;
+    // return with no value if next is } or newline or EOF 
+    if (!check(parser, TK_RBRACE)   &&
+        !check(parser, TK_NEWLINE)  &&
+        !check(parser, TK_SEMICOLON)&&
+        !check(parser, TK_LEX_EOF)) {
+        value = parse_expression(parser);
+    }
+
+    Node *node = make_node(parser, NODE_RETURN, start);
+    node->return_.value = value;
+    return node;
 }
 
 static Node* parse_write(Parser* parser) {
@@ -604,6 +744,7 @@ static Node* parse_stmt(Parser* parser) {
 	    case TK_KW_LOOP: next(parser); return parse_loop_stmt(parser);
 		case TK_KW_CONTINUE: return parse_continue(parser);
 		case TK_KW_BREAK: return parse_break(parser);
+		case TK_KW_RETURN: return parse_return(parser);
         case TK_LEX_EOF: return NULL;
         default: {
             if (check(parser, TK_IDENT)) {
@@ -620,6 +761,7 @@ static Node* parse_stmt(Parser* parser) {
                                  !check(parser, TK_DOT) &&
                                  !check(parser, TK_DOT_DOT) &&
                                  !check(parser, TK_EQUAL) &&
+                                 !check(parser, TK_LPAREN) &&
                                  parser->rules[current(parser)->kind].prefix != NULL;
                 parser->cursor = saved;
                 if (var_write)

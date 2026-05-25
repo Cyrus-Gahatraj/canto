@@ -30,3 +30,5 @@ extern std::map<uint32_t, KeywordInstance*> KeywordModifiers;
 Value* expr_gen(Node *node);
 Value* stmt_gen(Node *node);
 
+std::string sym_name(uint32_t sym_id);
+

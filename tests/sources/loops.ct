@@ -1,5 +1,5 @@
 ~~
-    Welcome To The Machine — Loop Flow Test
+    Loop Flow Test
 
     This test validates that the Canto compiler correctly handles:
     1. 'if cond | loop' conditional execution.
