@@ -4,10 +4,31 @@
 #include "canto/compiler.h"
 #include "canto/ast.h"
 #include "canto/diagnostic.h"
+#include "canto/jit.h"
 #include "canto/lexer.h"
 #include "canto/parser.h"
 #include "canto/source_map.h"
 #include "canto/codegen.h"
+
+static bool is_expr_node(NodeKind kind) {
+    switch (kind) {
+        case NODE_BINARY:
+        case NODE_UNARY:
+        case NODE_CALL:
+        case NODE_IDENT:
+        case NODE_INT_LIT:
+        case NODE_DOUBLE_LIT:
+        case NODE_STRING_LIT:
+        case NODE_BOOL_LIT:
+        case NODE_GROUP:
+        case NODE_BLOCK:
+        case NODE_DOT:
+        case NODE_DOT_DOT:
+            return true;
+        default:
+            return false;
+    }
+}
 
 CantoContext* canto_ctx_create(bool is_repl) {
     CantoContext* ctx = (CantoContext*)malloc(sizeof(CantoContext));
@@ -15,12 +36,15 @@ CantoContext* canto_ctx_create(bool is_repl) {
     
     ctx->is_repl = is_repl;
     symtable_init(&ctx->global_symbols);
+    if (is_repl) codegen_set_repl_mode(true);
     codegen_init();
+	if(is_repl) jit_init();
     return ctx;
 }
 
 void canto_ctx_free(CantoContext* ctx) {
     if (!ctx) return;
+	if (ctx->is_repl) jit_free();
     symtable_free(&ctx->global_symbols);
     codegen_free();
     free(ctx);
@@ -38,7 +62,6 @@ bool compile(CantoContext* ctx, const char* source, const char* file_path, const
 
     init_lexer(&lexer, &map);
 
-    // Bind context's persistent symbols to the local lexer
     lexer.symbols = ctx->global_symbols;
 
     run_lex(&lexer, &diags);
@@ -70,20 +93,39 @@ bool compile(CantoContext* ctx, const char* source, const char* file_path, const
 
     if (!ok){
         success = false;
-        codegen_finalize(1);
+        if (ctx->is_repl) {
+            codegen_init();
+            codegen_set_symtable(&ctx->global_symbols);
+        } else {
+            codegen_finalize(1);
+        }
     } else {
-        if (!ctx->is_repl) {
+        bool is_expr = ctx->is_repl &&
+                       tree->block.count > 0 &&
+                       is_expr_node(tree->block.stmts[tree->block.count - 1]->kind);
+
+        if (ctx->is_repl && is_expr) {
+            codegen_finalize_repl();
+        } else {
             codegen_finalize(0);
+        }
+
+        if (!ctx->is_repl) {
             if (output_path != NULL) {
                 codegen_dump(output_path);
             }
         } else {
-            printf("\n");
-            codegen_print_ir();
+            int result = jit_run();
+            if (is_expr) {
+                printf("%d\n", result);
+                fflush(stdout);
+            }
+
+            codegen_init();
+            codegen_set_symtable(&ctx->global_symbols);
         }
     }
 
-    // Save mutated symbol additions back into the persistent context
     ctx->global_symbols = lexer.symbols;
 
 cleanup:

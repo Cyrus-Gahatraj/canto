@@ -40,7 +40,23 @@ Value* stmt_gen(Node* node) {
 			Value* val = expr_gen(node->let.value);
 			if(!val) return nullptr;
 
-			// Get the current function, find it main entry block
+			if (IsRepl && TheReplGlobals) {
+				if (val->getType()->isDoubleTy())
+					val = Builder->CreateFPToSI(val, Type::getInt64Ty(*TheContext));
+				else if (val->getType()->isIntegerTy(1))
+					val = Builder->CreateIntCast(val, Type::getInt64Ty(*TheContext), true);
+				else if (val->getType()->isIntegerTy())
+					val = Builder->CreateIntCast(val, Type::getInt64Ty(*TheContext), true);
+
+				Value *idx = ConstantInt::get(Type::getInt64Ty(*TheContext), node->let.name_sym);
+				Value *gep = Builder->CreateGEP(
+					ArrayType::get(Type::getInt64Ty(*TheContext), 65536),
+					TheReplGlobals,
+					{ConstantInt::get(Type::getInt32Ty(*TheContext), 0), idx});
+				Builder->CreateStore(val, gep);
+				return val;
+			}
+
 			Function* fn = Builder->GetInsertBlock()->getParent();
 			IRBuilder<> entry(&fn->getEntryBlock(),
 							fn->getEntryBlock().begin());
@@ -50,7 +66,6 @@ Value* stmt_gen(Node* node) {
 				val->getType(),
 				nullptr,
 				var_name);
-			
 
 			Builder->CreateStore(val, slot);
 			NamedValues[var_name] = slot;

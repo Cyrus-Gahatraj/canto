@@ -71,13 +71,9 @@ fn main() {
     let llvm_includedir = llvm_config(&["--includedir"]);
     let llvm_libdir = llvm_config(&["--libdir"]);
     let llvm_libs = llvm_config(&[
-        "--libs",
-        "core",
-        "executionengine",
-        "mcjit",
-        "native",
-        "support",
-        "target",
+        "--libs", "core", "executionengine",
+        "native", "support", "target",
+        "orcjit", // for jit
     ]);
     let llvm_syslibs = llvm_config(&["--system-libs"]);
     let llvm_cxxflags = llvm_config(&["--cxxflags"]);
@@ -91,6 +87,7 @@ fn main() {
             "src/llvm/context.cpp",
             "src/llvm/expr_gen.cpp",
             "src/llvm/stmt_gen.cpp",
+            "src/llvm/jit.cpp",
         ])
         .include("include")
         .include(&llvm_includedir)

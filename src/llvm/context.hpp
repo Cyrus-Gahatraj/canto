@@ -5,6 +5,7 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/GlobalVariable.h>
 #include <map>
 #include <string>
 #include <memory>
@@ -26,9 +27,12 @@ extern std::vector<std::pair<BasicBlock*, BasicBlock*>> LoopStack;
 // keyword modifier instances: sym -> instance (for `keyword.edit { }`)
 extern std::map<uint32_t, KeywordInstance*> KeywordModifiers;
 
+// REPL persistent global array (external reference into runtime module)
+extern GlobalVariable *TheReplGlobals;
+extern bool IsRepl;
+
 // forward declarations
 Value* expr_gen(Node *node);
 Value* stmt_gen(Node *node);
 
 std::string sym_name(uint32_t sym_id);
-

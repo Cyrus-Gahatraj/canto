@@ -6,6 +6,15 @@ Value* expr_gen(Node* node) {
 
 	switch(node->kind) {
 		case NODE_IDENT: {
+			if (IsRepl && TheReplGlobals) {
+				Value *idx = ConstantInt::get(Type::getInt64Ty(*TheContext), node->ident.sym);
+				Value *gep = Builder->CreateGEP(
+					ArrayType::get(Type::getInt64Ty(*TheContext), 65536),
+					TheReplGlobals,
+					{ConstantInt::get(Type::getInt32Ty(*TheContext), 0), idx});
+				return Builder->CreateLoad(Type::getInt64Ty(*TheContext), gep, "repl_load");
+			}
+
 			std::string key = sym_name(node->ident.sym);
 
 			auto it = NamedValues.find(key);

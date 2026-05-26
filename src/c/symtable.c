@@ -31,6 +31,8 @@ void symtable_init(SymTable *table) {
 }
 
 void symtable_free(SymTable *table) {
+    for (uint32_t i = 1; i <= table->count; i++)
+        free((void*)table->syms[i].start);
     free(table->syms);
     free(table->slots);
     memset(table, 0, sizeof(*table)); 
@@ -78,9 +80,17 @@ SymId intern_symbol(SymTable *table, Symbol *symbol) {
         table->syms     = EXTEND_ARENA(Symbol, table->syms, table->capacity);
     }
 
+    char *copy = malloc(symbol->length + 1);
+    if (!copy) {
+        fprintf(stderr, "symtable: out of memory for string copy\n");
+        exit(1);
+    }
+    memcpy(copy, symbol->start, symbol->length);
+    copy[symbol->length] = '\0';
+
     uint32_t new_id     = table->count + 1;
     table->syms[new_id] = (Symbol){
-        .start  = symbol->start,
+        .start  = copy,
         .length = symbol->length,
         .hash   = symbol->hash,
         .kind   = symbol->kind,
