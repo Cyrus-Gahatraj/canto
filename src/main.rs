@@ -7,6 +7,7 @@ use std::{
     error::Error,
     path::Path,
     option::Option,
+    process,
 };
 
 /// Canto — a poetic, configurable programming language
@@ -37,30 +38,97 @@ enum Commands {
         /// Path to the .ct file to execute
         path: String,
     },
+
+    Run {
+        path: String,
+    },
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
-    std::fs::create_dir_all("build")?;
+    let build_dir = "build";
+    let tmp_dir =  build_dir.to_owned() + "/.tmp";
+    std::fs::create_dir_all(&tmp_dir)?;
 
     match &cli.command {
         Some(Commands::Build { path }) => {
-            let path: &Path = Path::new(path);
-
-            if path.extension().and_then(|ext| ext.to_str()) != Some("ct") {
-                eprintln!("Error: File must have a .ct extension");
-                std::process::exit(65);
-            }
-
-            let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("canto");
-            let output_ll = format!("build/{}.ll", file_stem);
-
-            let mut engine = Engine::new(false);
-            read_file(&mut engine, path, Path::new(&output_ll))?;
+            let _ = build_executable(path.to_string(), false);
+        },
+        Some(Commands::Run { path }) => {
+            let _ = build_executable(path.to_string(), true);
         },
         None => {
             let mut engine = Engine::new(true);
             run_repl(&mut engine)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Build the executable
+fn build_executable(path: String, execute: bool) -> Result<(), Box<dyn Error>> {
+    let build_dir = "build";
+    let tmp_dir =  build_dir.to_owned() + "/.tmp";
+    std::fs::create_dir_all(&tmp_dir)?;
+
+    let path: &Path = Path::new(&path);
+
+    if path.extension().and_then(|ext| ext.to_str()) != Some("ct") {
+        eprintln!("Error: File must have a .ct extension");
+        process::exit(65);
+    }
+
+    let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("canto");
+    let tmp_ll = format!("{}/{}.ll", tmp_dir, file_stem);
+
+    let extension = if cfg!(target_os = "windows") {
+        ".exe"
+    } else {
+        "" 
+    };
+    let bin_out = format!("{}/{}{}", build_dir, file_stem, extension);
+
+    let mut engine = Engine::new(false);
+    read_file(&mut engine, path, Path::new(&tmp_ll))?;
+
+    let status = process::Command::new("clang")
+        .arg(&tmp_ll)
+        .arg("-O2") // optimization
+        .arg("-Wno-unused-command-line-argument") // Quiets unused args warning
+        .arg("-Wno-override-module") // Quiets target triple overrides warning
+        .arg("-o")
+        .arg(&bin_out)
+        .status();
+
+    match status {
+       Ok(s) if s.success() => {
+            if !execute {
+                println!("Build Successful: {}", bin_out);
+            }
+       }
+       _ => {
+           eprintln!("Linking Error: failed to assemble native binary execuatable");
+           process::exit(70);
+       } 
+    }
+
+    let _ = std::fs::remove_dir_all(tmp_dir);
+
+    if execute {
+        let run_path = format!("./{}", bin_out);
+        let run_status = process::Command::new(&run_path).status();
+        
+        match run_status {
+            Ok(s) => {
+                if !s.success() {
+                    process::exit(s.code().unwrap_or(1));
+                }
+            }
+            Err(_) => {
+                eprintln!("Runtime Error: failed to launch execution binary target");
+                process::exit(71);
+            }
         }
     }
 

@@ -3,38 +3,34 @@ use std::process::Command;
 
 pub struct CantoTest {
     file_path: String,
-    ir_path: String,
-    binary: PathBuf,
+    bin_output_path: PathBuf,
+    compiler_binary: PathBuf,
 }
 
 impl CantoTest {
     pub fn new(filename: &str) -> Self {
-        let mut bin_path_str = String::from("./target/debug/canto");
-        if cfg!(target_os = "windows") {
-            bin_path_str += ".exe";
-        }
+        let bin_path = PathBuf::from(env!("CARGO_BIN_EXE_canto"));
 
-        let bin_path = PathBuf::from(bin_path_str);
         if !bin_path.exists() {
             panic!(
-                "Canto binary not found at {:?}. Please run 'cargo build' before executing.\n",
+                "Canto driver binary missing at absolute target: {:?}",
                 bin_path
             );
         }
+        
         let path = "tests/sources/".to_owned() + filename;
-
         let base_name = filename.strip_suffix(".ct").unwrap_or(filename);
-        let ir_path = format!("build/{}.ll", base_name);
+        let bin_output_path = PathBuf::from(format!("build/{}", base_name));
 
         Self {
             file_path: path,
-            ir_path,
-            binary: bin_path,
+            bin_output_path,
+            compiler_binary: bin_path,
         }
     }
 
     pub fn compile(&self) -> (bool, String) {
-        let output = Command::new(&self.binary)
+        let output = Command::new(&self.compiler_binary)
             .arg("build")
             .arg(&self.file_path)
             .output()
@@ -45,12 +41,16 @@ impl CantoTest {
     }
 
     pub fn run(&self) -> String {
-        let interpreter = "lli";
+        if !self.bin_output_path.exists() {
+            panic!(
+                "Compiled target binary missing at: {:?}. Did compilation step fail?",
+                self.bin_output_path
+            );
+        }
 
-        let output = Command::new(interpreter)
-            .arg(&self.ir_path)
+        let output = Command::new(&self.bin_output_path)
             .output()
-            .expect("Could not run lli. Be sure LLVM is installed.");
+            .expect("Failed to execute compiled native test target");
 
         String::from_utf8_lossy(&output.stdout).to_string()
     }
@@ -68,7 +68,7 @@ impl CantoTest {
         assert_eq!(
             program_output.trim(),
             expected_output.trim(),
-            "\nRuntime output mismatch for file: {}\n",
+            "\nRuntime execution output mismatch for file: {}\n",
             self.file_path
         );
     }
