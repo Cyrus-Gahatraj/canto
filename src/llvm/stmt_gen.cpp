@@ -41,20 +41,7 @@ Value* stmt_gen(Node* node) {
 			if(!val) return nullptr;
 
 			if (IsRepl && TheReplGlobals) {
-				if (val->getType()->isDoubleTy())
-					val = Builder->CreateFPToSI(val, Type::getInt64Ty(*TheContext));
-				else if (val->getType()->isIntegerTy(1))
-					val = Builder->CreateIntCast(val, Type::getInt64Ty(*TheContext), true);
-				else if (val->getType()->isIntegerTy())
-					val = Builder->CreateIntCast(val, Type::getInt64Ty(*TheContext), true);
-
-				Value *idx = ConstantInt::get(Type::getInt64Ty(*TheContext), node->let.name_sym);
-				Value *gep = Builder->CreateGEP(
-					ArrayType::get(Type::getInt64Ty(*TheContext), 65536),
-					TheReplGlobals,
-					{ConstantInt::get(Type::getInt32Ty(*TheContext), 0), idx});
-				Builder->CreateStore(val, gep);
-				return val;
+				return repl_store(node->let.name_sym, val);
 			}
 
 			Function* fn = Builder->GetInsertBlock()->getParent();

@@ -9,6 +9,7 @@
 #include "canto/parser.h"
 #include "canto/source_map.h"
 #include "canto/codegen.h"
+#include "canto/repl.h"
 
 static bool is_expr_node(NodeKind kind) {
     switch (kind) {
@@ -36,7 +37,7 @@ CantoContext* canto_ctx_create(bool is_repl) {
     
     ctx->is_repl = is_repl;
     symtable_init(&ctx->global_symbols);
-    if (is_repl) codegen_set_repl_mode(true);
+    if (is_repl) repl_init();
     codegen_init();
 	if(is_repl) jit_init();
     return ctx;
@@ -44,7 +45,10 @@ CantoContext* canto_ctx_create(bool is_repl) {
 
 void canto_ctx_free(CantoContext* ctx) {
     if (!ctx) return;
-	if (ctx->is_repl) jit_free();
+	if (ctx->is_repl){
+		jit_free();
+		repl_free();
+	} 
     symtable_free(&ctx->global_symbols);
     codegen_free();
     free(ctx);
@@ -82,6 +86,7 @@ bool compile(CantoContext* ctx, const char* source, const char* file_path, const
     }
 
     codegen_set_symtable(&lexer.symbols);
+    if (ctx->is_repl) repl_setup_globals();
 
     bool ok = true;
     for (uint32_t i = 0; i < tree->block.count; i++) {
@@ -115,11 +120,9 @@ bool compile(CantoContext* ctx, const char* source, const char* file_path, const
                 codegen_dump(output_path);
             }
         } else {
-            int result = jit_run();
-            if (is_expr) {
-                printf("%d\n", result);
-                fflush(stdout);
-            }
+            repl_register_storage();
+            if (jit_run() == -1) success = false;
+            else if (is_expr) repl_print(REPL_RESULT_SLOT);
 
             codegen_init();
             codegen_set_symtable(&ctx->global_symbols);

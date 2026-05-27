@@ -88,6 +88,7 @@ fn main() {
             "src/llvm/expr_gen.cpp",
             "src/llvm/stmt_gen.cpp",
             "src/llvm/jit.cpp",
+            "src/llvm/repl.cpp",
         ])
         .include("include")
         .include(&llvm_includedir)

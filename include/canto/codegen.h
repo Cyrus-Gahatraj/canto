@@ -13,7 +13,6 @@ extern "C" {
 
 	void codegen_dump(const char* output_path);
 	void codegen_set_symtable(SymTable *table);
-	void codegen_set_repl_mode(bool repl);
 	void codegen_finalize(int ret);
 	void codegen_finalize_repl(void);
 	void codegen_print_ir();
