@@ -7,6 +7,7 @@ std::map<std::string, AllocaInst*> NamedValues;
 SymTable *TheSymtable = nullptr;
 std::vector<std::pair<BasicBlock*, BasicBlock*>> LoopStack;
 bool IsRepl = false;
+std::map<std::string, Type*> VariableElementTypes;
 
 std::string sym_name(uint32_t sym_id) {
     if (!TheSymtable || sym_id == 0 || sym_id > TheSymtable->count)

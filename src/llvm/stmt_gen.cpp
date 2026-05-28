@@ -6,12 +6,21 @@ Value* stmt_gen(Node* node) {
 	switch (node->kind) {
 
 		case NODE_LET: {
-			if (node->let.value && node->let.value->kind == NODE_EDIT &&
-				node->let.value->edit.target->kind == NODE_KEYWORD) {
-				Node *edit_node = node->let.value;
-				uint32_t tk_type = edit_node->edit.target->keyword.tk_type;
-				KeywordMeta *meta = get_keyword_meta(tk_type);
+			if (node->let.value && node->let.value->kind == NODE_EDIT) {
+				Node *target = node->let.value->edit.target;
+				KeywordMeta *meta = nullptr;
+				uint32_t tk_type = 0;
+				if (target->kind == NODE_KEYWORD) {
+					tk_type = target->keyword.tk_type;
+					meta = get_keyword_meta(tk_type);
+				} else if (target->kind == NODE_IDENT) {
+					std::string tname = sym_name(target->ident.sym);
+					meta = get_keyword_meta_by_name(tname.c_str());
+					if (meta) tk_type = meta->tk_type;
+				}
+
 				if (meta) {
+					Node *edit_node = node->let.value;
 					KeywordInstance *inst = create_keyword_instance(tk_type);
 					for (uint32_t i = 0; i < edit_node->edit.pair_count; i++) {
 						Node *pair = edit_node->edit.pairs[i];
@@ -31,14 +40,69 @@ Value* stmt_gen(Node* node) {
 							const Symbol *s = &TheSymtable->syms[pair->edit_pair.value->ident.sym];
 							std::string val(s->start, s->length);
 							apply_keyword_edit(inst, attr_name.c_str(), val.c_str());
+						} else if (pair->edit_pair.value->kind == NODE_BOOL_LIT) {
+							std::string val = pair->edit_pair.value->bool_lit.value ? "true" : "false";
+							apply_keyword_edit(inst, attr_name.c_str(), val.c_str());
 						}
 					}
 					KeywordModifiers[node->let.name_sym] = inst;
+					return ConstantInt::get(Builder->getInt32Ty(), 0);
 				}
-				return ConstantInt::get(Builder->getInt32Ty(), 0);
 			}
+
 			Value* val = expr_gen(node->let.value);
 			if(!val) return nullptr;
+
+			std::string var_name = sym_name(node->let.name_sym);
+
+			// Record array element types for variable
+			if (node->let.value && node->let.value->kind == NODE_ARRAY && node->let.value->array.count > 0) {
+				Value* first_elem = expr_gen(node->let.value->array.exprs[0]);
+				if (first_elem) {
+					VariableElementTypes[var_name] = first_elem->getType();
+				}
+			}
+
+			// Handle custom type annotation if provided
+			Type* custom_type = nullptr;
+			bool is_many = false;
+			if (node->let.type_ann && node->let.type_ann->kind == NODE_IDENT) {
+				auto it = KeywordModifiers.find(node->let.type_ann->ident.sym);
+				if (it != KeywordModifiers.end()) {
+					const char* name_val = get_keyword_attr(it->second, "name");
+					const char* is_many_val = get_keyword_attr(it->second, "is_many");
+					if (is_many_val && strcmp(is_many_val, "true") == 0) {
+						is_many = true;
+					}
+					if (name_val) {
+						if (strcmp(name_val, "integer") == 0 || strcmp(name_val, "int") == 0) {
+							custom_type = Type::getInt64Ty(*TheContext);
+						} else if (strcmp(name_val, "double") == 0 || strcmp(name_val, "float") == 0) {
+							custom_type = Type::getDoubleTy(*TheContext);
+						} else if (strcmp(name_val, "bool") == 0 || strcmp(name_val, "boolean") == 0) {
+							custom_type = Type::getInt1Ty(*TheContext);
+						} else if (strcmp(name_val, "string") == 0) {
+							custom_type = PointerType::get(Builder->getInt8Ty(), 0);
+						}
+					}
+				}
+			}
+
+			if (custom_type) {
+				if (is_many) {
+					VariableElementTypes[var_name] = custom_type;
+					custom_type = PointerType::get(custom_type, 0);
+				}
+				if (val->getType() != custom_type) {
+					if (custom_type->isDoubleTy() && val->getType()->isIntegerTy()) {
+						val = Builder->CreateSIToFP(val, custom_type);
+					} else if (custom_type->isIntegerTy() && val->getType()->isDoubleTy()) {
+						val = Builder->CreateFPToSI(val, custom_type);
+					} else if (custom_type->isIntegerTy() && val->getType()->isIntegerTy()) {
+						val = Builder->CreateIntCast(val, custom_type, true);
+					}
+				}
+			}
 
 			if (IsRepl && TheReplGlobals) {
 				return repl_store(node->let.name_sym, val);
@@ -48,9 +112,8 @@ Value* stmt_gen(Node* node) {
 			IRBuilder<> entry(&fn->getEntryBlock(),
 							fn->getEntryBlock().begin());
 
-			std::string var_name = sym_name(node->let.name_sym);
 			AllocaInst* slot = entry.CreateAlloca(
-				val->getType(),
+				custom_type ? custom_type : val->getType(),
 				nullptr,
 				var_name);
 
@@ -58,7 +121,7 @@ Value* stmt_gen(Node* node) {
 			NamedValues[var_name] = slot;
 
 			return val;
-	    }
+		}
 
 		case NODE_WRITE: {
 			 Function *printf_fn = TheModule->getFunction("printf");
@@ -80,6 +143,17 @@ Value* stmt_gen(Node* node) {
 				 if (it != KeywordModifiers.end()) {
 					 const char *val = get_keyword_attr(it->second, "end");
 					 if (val) end_str = val;
+				 } else {
+					 std::string kw_name = sym_name(node->write.modifier_sym);
+					 KeywordMeta *meta = get_keyword_meta_by_name(kw_name.c_str());
+					 if (meta) {
+						 for (uint32_t a = 0; a < meta->attr_count; a++) {
+							 if (strcmp(meta->attributes[a].name, "end") == 0) {
+								 end_str = meta->attributes[a].default_value;
+								 break;
+							 }
+						 }
+					 }
 				 }
 			 }
 
@@ -359,6 +433,9 @@ Value* stmt_gen(Node* node) {
 					} else if (pair->edit_pair.value->kind == NODE_IDENT) {
 						const Symbol *s = &TheSymtable->syms[pair->edit_pair.value->ident.sym];
 						std::string val(s->start, s->length);
+						apply_keyword_edit(inst, attr_name.c_str(), val.c_str());
+					} else if (pair->edit_pair.value->kind == NODE_BOOL_LIT) {
+						std::string val = pair->edit_pair.value->bool_lit.value ? "true" : "false";
 						apply_keyword_edit(inst, attr_name.c_str(), val.c_str());
 					}
 				}

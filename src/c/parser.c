@@ -28,7 +28,9 @@ static Node* parse_param(Parser* parser);
 static Node* parse_return(Parser* parser);
 static Node* parse_call(Parser* parser, Node* left);
 static Node* parse_keyword_ref(Parser* parser);
-static Node* parse_var_write(Parser* parser, uint32_t name_sym, Span start);
+static Node* parse_keyword_stmt(Parser* parser, uint32_t keyword_sym, Span start);
+static Node* parse_array_literal(Parser* parser);
+static Node* parse_index(Parser* parser, Node* left);
 
 static const ParseRule global_rules[TK_COUNT] = {
 	// identifier
@@ -49,6 +51,8 @@ static const ParseRule global_rules[TK_COUNT] = {
 	[TK_LPAREN]     = { parse_grouping, parse_call, PREC_CALL },
 	[TK_RPAREN]     = { NULL, NULL, PREC_NONE },	 // RPAREN don't need grouping
 	[TK_PIPE]       = { NULL, NULL, PREC_NONE },
+	[TK_LBRACKET]   = { parse_array_literal, parse_index, PREC_CALL },
+	[TK_RBRACKET]   = { NULL, NULL, PREC_NONE },
 
 	// Comparision
 	[TK_GT]         = { NULL, parse_binary, PREC_CMP },
@@ -230,6 +234,51 @@ static Node* parse_grouping(Parser* parser) {
 	node->group.expr = inner;
 
 	return node;
+}
+
+static Node* parse_array_literal(Parser* parser) {
+    Span start = current(parser)->span;
+    next(parser); // consume '['
+    skip_trivia(parser);
+
+    Node **exprs = NULL;
+    uint32_t count = 0, cap = 0;
+
+    while (!check(parser, TK_RBRACKET) && !check(parser, TK_LEX_EOF)) {
+        skip_trivia(parser);
+        Node *expr = parse_expr(parser, PREC_NONE);
+        if (!expr) break;
+
+        if (count >= cap) {
+            cap = cap ? cap * 2 : 8;
+            exprs = realloc(exprs, cap * sizeof(Node*));
+        }
+        exprs[count++] = expr;
+
+        skip_trivia(parser);
+        if (!match(parser, TK_COMMA)) break;
+        skip_trivia(parser);
+    }
+
+    expect_token(parser, TK_RBRACKET, "expected ']' to close the array literal.");
+
+    Node *node = make_node(parser, NODE_ARRAY, start);
+    node->array.exprs = exprs;
+    node->array.count = count;
+    return node;
+}
+
+static Node* parse_index(Parser* parser, Node* left) {
+    next(parser); // consume '['
+    skip_trivia(parser);
+
+    Node *idx = parse_expr(parser, PREC_NONE);
+    expect_token(parser, TK_RBRACKET, "expected ']' to close the index expression.");
+
+    Node *node = make_node(parser, NODE_INDEX, left->span);
+    node->index.left = left;
+    node->index.index = idx;
+    return node;
 }
 
 static Node* parse_binary(Parser* parser, Node* left) {
@@ -416,57 +465,11 @@ static Node* parse_return(Parser* parser) {
     return node;
 }
 
-static Node* parse_write(Parser* parser) {
-    Span start = current(parser)->span;
-    next(parser);
-
+static Node* parse_keyword_stmt(Parser* parser, uint32_t keyword_sym, Span start) {
     Node *node = make_node(parser, NODE_WRITE, start);
     node->write.exprs = malloc(sizeof(Node*) * 64);
     node->write.count = 0;
-    node->write.modifier_sym = 0;
-
-    while (true) {
-        // skip only horizontal trivia — newlines terminate the write statement
-        while (!check(parser, TK_LEX_EOF) &&
-               (check(parser, TK_WHITESPACE)   ||
-                check(parser, TK_LINE_COMMENT) ||
-                check(parser, TK_BLOCK_COMMENT)))
-            next(parser);
-
-        TokenKind kind = current(parser)->kind;
-
-        if (kind == TK_LEX_EOF   ||
-            kind == TK_SEMICOLON ||
-            kind == TK_NEWLINE   ||
-            kind == TK_RBRACE)
-            break;
-
-        if (kind == TK_COMMA) { next(parser); continue; }
-
-        if (kind == TK_KW_WRITE  ||
-            kind == TK_KW_LET    ||
-            kind == TK_KW_IF     ||
-            kind == TK_KW_LOOP   ||
-            kind == TK_KW_RETURN)
-            break;
-
-        Node *arg = parse_expression(parser);
-        if (arg)
-            node->write.exprs[node->write.count++] = arg;
-        else
-            break;
-    }
-
-    return node;
-}
-
-static Node* parse_var_write(Parser* parser, uint32_t name_sym, Span start) {
-    next(parser); // consume the identifier token
-
-    Node *node = make_node(parser, NODE_WRITE, start);
-    node->write.exprs = malloc(sizeof(Node*) * 64);
-    node->write.count = 0;
-    node->write.modifier_sym = name_sym;
+    node->write.modifier_sym = keyword_sym;
 
     while (true) {
         while (!check(parser, TK_LEX_EOF) &&
@@ -739,7 +742,11 @@ static Node* parse_stmt(Parser* parser) {
     skip_trivia(parser);
     switch (current(parser)->kind) {
         case TK_KW_LET: return parse_let_declaration(parser);
-        case TK_KW_WRITE: return parse_write(parser);
+        case TK_KW_WRITE: {
+            Span start = current(parser)->span;
+            next(parser);
+            return parse_keyword_stmt(parser, 0, start);
+        }
 		case TK_KW_IF: next(parser); return parse_if_stmt(parser);
 	    case TK_KW_LOOP: next(parser); return parse_loop_stmt(parser);
 		case TK_KW_CONTINUE: return parse_continue(parser);
@@ -764,8 +771,10 @@ static Node* parse_stmt(Parser* parser) {
                                  !check(parser, TK_LPAREN) &&
                                  parser->rules[current(parser)->kind].prefix != NULL;
                 parser->cursor = saved;
-                if (var_write)
-                    return parse_var_write(parser, id_tk.sym, id_tk.span);
+                if (var_write) {
+                    next(parser); // consume the identifier token
+                    return parse_keyword_stmt(parser, id_tk.sym, id_tk.span);
+                }
             }
             return parse_expression(parser);
         }

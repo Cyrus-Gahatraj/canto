@@ -40,6 +40,19 @@ KeywordMeta* get_keyword_meta(uint32_t tk_type) {
     return NULL;
 }
 
+KeywordMeta* get_keyword_meta_by_name(const char *name) {
+    if (!name) return NULL;
+    for (uint32_t i = 0; i < keyword_registry_count; i++) {
+        if (strcmp(keyword_registry[i]->name, name) == 0)
+            return (KeywordMeta*)keyword_registry[i];
+    }
+    for (uint32_t i = 0; i < sizeof(local_registry)/sizeof(local_registry[0]); i++) {
+        if (strcmp(local_registry[i].name, name) == 0)
+            return &local_registry[i];
+    }
+    return NULL;
+}
+
 /* ── Instance management ─────────────────────────────────────────── */
 
 KeywordInstance* create_keyword_instance(uint32_t tk_type) {

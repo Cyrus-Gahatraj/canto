@@ -5,7 +5,8 @@ typedef struct Type {
 } Type;
 
 static KeywordAttr type_attrs[] = {
-    { "name", "type", "Display name for the type" },
+    { "name",    "type",  "Display name for the type" },
+    { "is_many", "false", "Whether the type represents a many_items/array" },
 };
 
 const KeywordMeta type_meta = {

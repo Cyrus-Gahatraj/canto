@@ -13,6 +13,7 @@ extern "C" void codegen_init(void) {
 	NamedValues.clear();
 	LoopStack.clear();
 	KeywordModifiers.clear();
+	VariableElementTypes.clear();
 	LastExprResult = nullptr;
 	TheReplGlobals = nullptr;
 	TheContext = std::make_unique<LLVMContext>();
@@ -66,6 +67,7 @@ extern "C" void codegen_free() {
 	for (auto &kv : KeywordModifiers)
 		free_keyword_instance(kv.second);
 	KeywordModifiers.clear();
+	VariableElementTypes.clear();
 	TheSymtable = nullptr;
 }
 

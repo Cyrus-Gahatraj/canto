@@ -48,6 +48,12 @@ struct Node {
 			Node* index;
 		} index;
 
+		// Array literal: [1, 2, 3]
+		struct {
+			Node**   exprs;
+			uint32_t count;
+		} array;
+
 		struct {
 			Node* expr;
 		} group;

@@ -17,6 +17,7 @@ AST_NODE(CALL,        "Invocational Call")
 AST_NODE(DOT,         "Current Context Access (.)")
 AST_NODE(DOT_DOT,     "Parent Context Access (..)")
 AST_NODE(INDEX,       "Index Access ([])")
+AST_NODE(ARRAY,       "Array Literal")
 AST_NODE(GROUP,       "Grouped Expression")
 
 /* Structural Modification Expressions */

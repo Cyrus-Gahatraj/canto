@@ -1,0 +1,20 @@
+~~
+Arrays Test
+
+This test validates:
+1. Array literals and index access
+2. Custom type definitions using type.edit
+3. Custom write modifiers using write.edit
+~~
+
+~ ManyString
+let MString type.edit { .name: "string", .is_many: true }
+
+~ Array literal and index access
+let nums :MString ["Hello", "Array"]
+write nums[0]
+write nums[1]
+
+~ Expected Terminal Output:
+~ Hello
+~ Array

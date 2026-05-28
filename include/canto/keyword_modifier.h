@@ -33,6 +33,7 @@ typedef struct {
 } KeywordInstance;
 
 KeywordMeta*        get_keyword_meta(uint32_t tk_type);
+KeywordMeta*        get_keyword_meta_by_name(const char *name);
 KeywordInstance*    create_keyword_instance(uint32_t tk_type);
 KeywordInstance*    copy_keyword_instance(const KeywordInstance *src);
 bool                apply_keyword_edit(KeywordInstance *inst, const char *attr, const char *value);

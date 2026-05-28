@@ -27,6 +27,9 @@ extern std::vector<std::pair<BasicBlock*, BasicBlock*>> LoopStack;
 // keyword modifier instances: sym -> instance (for `keyword.edit { }`)
 extern std::map<uint32_t, KeywordInstance*> KeywordModifiers;
 
+// Tracks variable element types for correct GEP on index load/store
+extern std::map<std::string, Type*> VariableElementTypes;
+
 // REPL persistent global array (external reference into runtime module)
 extern GlobalVariable *TheReplGlobals;
 extern bool IsRepl;

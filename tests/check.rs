@@ -35,3 +35,8 @@ fn functions_test() {
 fn keyword_modifiers_test() {
     CantoTest::new("keyword_modifiers.ct").assert_output("hello world");
 }
+
+#[test]
+fn arrays_test() {
+    CantoTest::new("arrays.ct").assert_output("Hello\nArray");
+}

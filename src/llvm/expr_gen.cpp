@@ -146,6 +146,75 @@ Value* expr_gen(Node* node) {
 		case NODE_EDIT:
 			return stmt_gen(node);
 
+		case NODE_ARRAY: {
+			if (node->array.count == 0) {
+				fprintf(stderr, "codegen: empty array literal not supported\n");
+				return nullptr;
+			}
+
+			// Evaluate first element to determine element type
+			Value *first = expr_gen(node->array.exprs[0]);
+			if (!first) return nullptr;
+			Type *elem_ty = first->getType();
+
+			// Allocate array on the stack
+			Value *size_val = ConstantInt::get(Builder->getInt64Ty(), node->array.count);
+			Function *fn = Builder->GetInsertBlock()->getParent();
+			IRBuilder<> entry_builder(&fn->getEntryBlock(), fn->getEntryBlock().begin());
+			AllocaInst *arr = entry_builder.CreateAlloca(elem_ty, size_val, "arr");
+
+			// Store each element
+			for (uint32_t i = 0; i < node->array.count; i++) {
+				Value *elem = (i == 0) ? first : expr_gen(node->array.exprs[i]);
+				if (!elem) return nullptr;
+
+				// Coerce if types differ
+				if (elem->getType() != elem_ty) {
+					if (elem_ty->isDoubleTy() && elem->getType()->isIntegerTy())
+						elem = Builder->CreateSIToFP(elem, elem_ty);
+					else if (elem_ty->isIntegerTy() && elem->getType()->isDoubleTy())
+						elem = Builder->CreateFPToSI(elem, elem_ty);
+				}
+
+				Value *idx = ConstantInt::get(Builder->getInt64Ty(), i);
+				Value *ptr = Builder->CreateGEP(elem_ty, arr, idx, "arr.elem");
+				Builder->CreateStore(elem, ptr);
+			}
+
+			return arr;
+		}
+
+		case NODE_INDEX: {
+			// Evaluate base pointer
+			Value *base = expr_gen(node->index.left);
+			if (!base) return nullptr;
+
+			Value *idx = expr_gen(node->index.index);
+			if (!idx) return nullptr;
+
+			// Look up element type from variable tracking
+			Type *elem_ty = nullptr;
+			if (node->index.left->kind == NODE_IDENT) {
+				std::string vname = sym_name(node->index.left->ident.sym);
+				auto it = VariableElementTypes.find(vname);
+				if (it != VariableElementTypes.end())
+					elem_ty = it->second;
+			}
+
+			if (!elem_ty) {
+				if (base->getType()->isPointerTy()) {
+					// Default to i64 if we have no type info
+					elem_ty = Type::getInt64Ty(*TheContext);
+				} else {
+					fprintf(stderr, "codegen: index target is not a pointer\n");
+					return nullptr;
+				}
+			}
+
+			Value *ptr = Builder->CreateGEP(elem_ty, base, idx, "idx.ptr");
+			return Builder->CreateLoad(elem_ty, ptr, "idx.val");
+		}
+
 		default:
 			fprintf(stderr, "Codegen Error: Unhandled node kind %d\n", node->kind);
 			return nullptr;
