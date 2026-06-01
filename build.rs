@@ -85,7 +85,10 @@ fn main() {
         .files([
             "src/llvm/codegen.cpp",
             "src/llvm/context.cpp",
+            "src/llvm/helpers.cpp",
             "src/llvm/expr_gen.cpp",
+            "src/llvm/var_gen.cpp",
+            "src/llvm/fn_gen.cpp",
             "src/llvm/stmt_gen.cpp",
             "src/llvm/jit.cpp",
             "src/llvm/repl.cpp",
