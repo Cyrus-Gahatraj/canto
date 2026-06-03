@@ -1,0 +1,34 @@
+~~
+    When Statement Test
+
+    Validates the 'when' switch-like construct in Canto.
+    The 'when' statement matches a subject expression against
+    a series of pattern arms, executing the first match.
+
+    Features tested:
+      1. Basic integer pattern matching
+      2. Optional separators: semicolons between arms
+      3. 'default' arm as catch-all fallback
+      4. No explicit 'break' needed (no fall-through)
+~~
+
+let status 200
+
+when status {
+    200: { write "Success" };   ~ semicolon separator, no fall-through
+    404: { write "Not Found" };
+    500: { write "Error" }
+}
+
+let code 42
+
+when code {
+    1:   { write "one" }
+    2:   { write "two" }
+    42:  { write "forty-two" }
+    default: { write "unknown" }
+}
+
+~ Expected Terminal Output:
+~ Success
+~ forty-two

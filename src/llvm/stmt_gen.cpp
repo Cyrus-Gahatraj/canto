@@ -207,6 +207,92 @@ static Value* gen_if(Node *node) {
     return ConstantInt::get(Builder->getInt32Ty(), 0);
 }
 
+// Helper to generate a type-aware equality comparison
+static Value* create_eq_comparison(Value *L, Value *R) {
+    if (!L || !R) return nullptr;
+    bool is_float = L->getType()->isDoubleTy() || R->getType()->isDoubleTy();
+    if (is_float) {
+        L = coerce_value(L, Type::getDoubleTy(*TheContext));
+        R = coerce_value(R, Type::getDoubleTy(*TheContext));
+        return Builder->CreateFCmpOEQ(L, R, "feq");
+    } else {
+        if (L->getType() != R->getType()) {
+            if (L->getType()->isIntegerTy() && R->getType()->isIntegerTy()) {
+                Type *target_ty = L->getType()->getIntegerBitWidth() > R->getType()->getIntegerBitWidth()
+                                  ? L->getType() : R->getType();
+                L = coerce_value(L, target_ty);
+                R = coerce_value(R, target_ty);
+            }
+        }
+        return Builder->CreateICmpEQ(L, R, "ieq");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// NODE_WHEN — pattern matching switch-like statement
+// ---------------------------------------------------------------------------
+static Value* gen_when(Node *node) {
+    Function *fn = Builder->GetInsertBlock()->getParent();
+
+    // Evaluate the subject expression
+    Value *subject_val = expr_gen(node->when.subject);
+    if (!subject_val) return nullptr;
+
+    BasicBlock *merge_bb = BasicBlock::Create(*TheContext, "when.merge", fn);
+    BasicBlock *curr_cond_bb = Builder->GetInsertBlock();
+
+    for (uint32_t i = 0; i < node->when.arm_count; i++) {
+        Node *arm = node->when.arms[i];
+
+        BasicBlock *body_bb = BasicBlock::Create(*TheContext, "when.body", fn);
+
+        if (arm->when_arm.is_else) {
+            // Default arm: jump unconditionally from current cond block to body
+            Builder->SetInsertPoint(curr_cond_bb);
+            Builder->CreateBr(body_bb);
+
+            // Emit body
+            Builder->SetInsertPoint(body_bb);
+            stmt_gen(arm->when_arm.body);
+            if (!Builder->GetInsertBlock()->getTerminator()) {
+                Builder->CreateBr(merge_bb);
+            }
+
+            curr_cond_bb = nullptr;
+            break;
+        } else {
+            BasicBlock *next_cond_bb = BasicBlock::Create(*TheContext, "when.cond", fn);
+
+            // Emit condition check in curr_cond_bb
+            Builder->SetInsertPoint(curr_cond_bb);
+            Value *pattern_val = expr_gen(arm->when_arm.pattern);
+            if (!pattern_val) return nullptr;
+
+            Value *eq = create_eq_comparison(subject_val, pattern_val);
+            if (!eq) return nullptr;
+
+            Builder->CreateCondBr(ensure_bool(eq, "whencond"), body_bb, next_cond_bb);
+
+            // Emit body
+            Builder->SetInsertPoint(body_bb);
+            stmt_gen(arm->when_arm.body);
+            if (!Builder->GetInsertBlock()->getTerminator()) {
+                Builder->CreateBr(merge_bb);
+            }
+
+            curr_cond_bb = next_cond_bb;
+        }
+    }
+
+    if (curr_cond_bb) {
+        Builder->SetInsertPoint(curr_cond_bb);
+        Builder->CreateBr(merge_bb);
+    }
+
+    Builder->SetInsertPoint(merge_bb);
+    return ConstantInt::get(Builder->getInt32Ty(), 0);
+}
+
 // ---------------------------------------------------------------------------
 // NODE_LOOP — general loop (counted, conditional, or infinite)
 // ---------------------------------------------------------------------------
@@ -356,6 +442,7 @@ Value* stmt_gen(Node *node) {
         case NODE_RETURN:   return gen_return(node);
         case NODE_WRITE:    return gen_write(node);
         case NODE_IF:       return gen_if(node);
+        case NODE_WHEN:     return gen_when(node);
         case NODE_LOOP:     return gen_loop(node);
         case NODE_CONTINUE: return gen_continue(node);
         case NODE_BREAK:    return gen_break(node);

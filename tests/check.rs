@@ -40,3 +40,9 @@ fn keyword_modifiers_test() {
 fn arrays_test() {
     CantoTest::new("arrays.ct").assert_output("Hello\nArray");
 }
+
+#[test]
+fn when_test() {
+    CantoTest::new("when.ct").assert_output("Success\nforty-two");
+}
+

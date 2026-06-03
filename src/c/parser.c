@@ -1,12 +1,14 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "canto/parser.h"
 #include "canto/arena.h"
 #include "canto/ast.h"
 #include "canto/diagnostic.h"
 #include "canto/token.h"
+#include "canto/symtable.h"
 
 #define INIT_NODE_CAPACITY 64
 
@@ -19,6 +21,7 @@ static Node* parse_grouping(Parser* parser);
 static Node* parse_let_declaration(Parser* parser);
 static Node* parse_block(Parser* parser);
 static Node* parse_if_stmt(Parser* parser);
+static Node* parse_when_stmt(Parser* parser);
 static Node* parse_string(Parser* parser);
 static Node* parse_dot_prefix(Parser* parser);
 static Node* parse_dot_infix(Parser* parser, Node* left);
@@ -563,6 +566,74 @@ static Node* parse_if_stmt(Parser* parser) {
 	return if_node;
 }
 
+static Node* parse_when_stmt(Parser* parser) {
+    Span start = current(parser)->span;
+    skip_trivia(parser);
+
+    Node *subject = parse_expression(parser);
+    if (!subject) return NULL;
+
+    skip_trivia(parser);
+    expect_token(parser, TK_LBRACE, "Expected '{' after 'when' subject");
+    skip_trivia(parser);
+
+    Node  **arms = NULL;
+    uint32_t count = 0, cap = 0;
+
+    while (!check(parser, TK_RBRACE) && !check(parser, TK_LEX_EOF)) {
+        skip_trivia(parser);
+        if (check(parser, TK_RBRACE)) break;
+
+        Span arm_start = current(parser)->span;
+        Node *arm = make_node(parser, NODE_WHEN_ARM, arm_start);
+        arm->when_arm.pattern = NULL;
+        arm->when_arm.is_else = false;
+
+        // Check for 'default' pattern
+        if (check(parser, TK_IDENT)) {
+            Token tk = *current(parser);
+            const Symbol *s = &parser->symbols->syms[tk.sym];
+            if (s->length == 7 && strncmp(s->start, "default", 7) == 0) {
+                next(parser); // consume 'default'
+                arm->when_arm.is_else = true;
+            }
+        }
+
+        // If not default, parse the pattern expression
+        if (!arm->when_arm.is_else) {
+            arm->when_arm.pattern = parse_expression(parser);
+            if (!arm->when_arm.pattern) break;
+        }
+
+        skip_trivia(parser);
+        expect_token(parser, TK_COLON, "Expected ':' after pattern");
+        skip_trivia(parser);
+
+        expect_token(parser, TK_LBRACE, "Expected '{' to start arm body");
+        arm->when_arm.body = parse_block(parser);
+
+        if (count >= cap) {
+            cap = cap ? cap * 2 : 4;
+            arms = realloc(arms, cap * sizeof(Node*));
+        }
+        arms[count++] = arm;
+
+        skip_trivia(parser);
+        // Let the comma go and let the semi colon break (optional comma or semicolon separator)
+        while (match(parser, TK_COMMA) || match(parser, TK_SEMICOLON)) {
+            skip_trivia(parser);
+        }
+    }
+
+    expect_token(parser, TK_RBRACE, "Expected '}' to close 'when' block");
+
+    Node *node = make_node(parser, NODE_WHEN, start);
+    node->when.subject   = subject;
+    node->when.arms      = arms;
+    node->when.arm_count = count;
+    return node;
+}
+
 static Node* parse_edit(Parser* parser, Node* target) {
     Span start = current(parser)->span;
     next(parser);   // consume 'edit'
@@ -748,6 +819,7 @@ static Node* parse_stmt(Parser* parser) {
             return parse_keyword_stmt(parser, 0, start);
         }
 		case TK_KW_IF: next(parser); return parse_if_stmt(parser);
+		case TK_KW_WHEN: next(parser); return parse_when_stmt(parser);
 	    case TK_KW_LOOP: next(parser); return parse_loop_stmt(parser);
 		case TK_KW_CONTINUE: return parse_continue(parser);
 		case TK_KW_BREAK: return parse_break(parser);
@@ -844,13 +916,14 @@ Node* parse_expression(Parser* parser) {
 }
 
 void init_parser(Parser *parser, DiagEngine* diags, 
-				Token *tokens, uint32_t count, SourceMap* map) {
+				Token *tokens, uint32_t count, SourceMap* map, SymTable* symbols) {
 	parser->map = map;
 	parser->tokens = tokens;
 	parser->count = count;
 	parser->cursor = 0;
 	parser->rules = global_rules;
 	parser->diags = diags;
+	parser->symbols = symbols;
 	parser->in_edit_block = false;
 	parser->had_error = false;
 	arena_init(&parser->arena);

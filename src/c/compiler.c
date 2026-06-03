@@ -76,7 +76,7 @@ bool compile(CantoContext* ctx, const char* source, const char* file_path, const
         goto cleanup;
     }
 
-    init_parser(&parser, &diags, lexer.tokens, lexer.tk_count, &map);
+    init_parser(&parser, &diags, lexer.tokens, lexer.tk_count, &map, &lexer.symbols);
     Node *tree = parse_program(&parser);
 
     if (diag_has_errors(&diags) && !tree) {

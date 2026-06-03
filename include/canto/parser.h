@@ -4,6 +4,7 @@
 #include "source_map.h"
 #include "diagnostic.h"
 #include "arena.h"
+#include "symtable.h"
 
 typedef enum {
     PREC_NONE		= 0,
@@ -40,13 +41,14 @@ struct Parser {
 
 	const ParseRule* rules;
 	Arena arena;
+    SymTable* symbols;
 
     bool in_edit_block; 
     bool had_error;
 };
 
 void init_parser(Parser* parser, DiagEngine* diags, 
-				Token* tokens, uint32_t count, SourceMap* map);
+				Token* tokens, uint32_t count, SourceMap* map, SymTable* symbols);
 void free_parser(Parser* parser);
 
 Node* parse_program(Parser* parser);
