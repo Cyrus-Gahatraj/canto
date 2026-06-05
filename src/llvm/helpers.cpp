@@ -113,6 +113,37 @@ Function* get_or_declare_printf() {
 }
 
 // ---------------------------------------------------------------------------
+// get_or_declare_strcmp
+// ---------------------------------------------------------------------------
+
+// Returns the `strcmp` function from the current module, declaring it first
+// if it hasn't been declared yet.
+//
+// C signature: int strcmp(const char *s1, const char *s2)
+// LLVM IR:     i32 strcmp(i8*, i8*)
+//
+// We use this to compare strings in `when` equality arms, because pointer
+// equality (icmp eq) would compare addresses, not content.
+Function* get_or_declare_strcmp() {
+    Function *fn = TheModule->getFunction("strcmp");
+    if (fn) return fn;
+
+    PointerType *char_ptr = PointerType::get(*TheContext, 0);
+    FunctionType *strcmp_type = FunctionType::get(
+        Builder->getInt32Ty(),      // return type: int (0 = equal)
+        { char_ptr, char_ptr },     // two const char* parameters
+        /*isVarArg=*/false
+    );
+
+    return Function::Create(
+        strcmp_type,
+        Function::ExternalLinkage,  // links to the system strcmp
+        "strcmp",
+        TheModule.get()
+    );
+}
+
+// ---------------------------------------------------------------------------
 // resolve_edit_attr_name
 // ---------------------------------------------------------------------------
 

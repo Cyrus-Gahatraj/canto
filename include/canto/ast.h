@@ -102,7 +102,8 @@ struct Node {
 		struct {
             Node* pattern; 
             Node* body;
-            bool  is_else;
+            bool  is_else;      // true for '_' default arm
+            bool  is_predicate; // true for '. > 4' style arms (dot = subject)
         } when_arm;
 
 		// try

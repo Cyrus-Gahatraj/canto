@@ -52,6 +52,12 @@ Value* ensure_bool(Value *val, const std::string &name = "cond");
 // LLVM IR signature: i32 printf(i8*, ...)
 Function* get_or_declare_printf();
 
+// Returns (or lazily declares) the C `strcmp` function in the current module.
+// Used for string equality comparisons in `when` arms.
+//
+// LLVM IR signature: i32 strcmp(i8*, i8*)
+Function* get_or_declare_strcmp();
+
 // ---------------------------------------------------------------------------
 // Keyword edit helpers
 // ---------------------------------------------------------------------------

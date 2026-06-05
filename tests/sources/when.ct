@@ -1,34 +1,53 @@
 ~~
-    When Statement Test
+    when.ct — Comprehensive test for the 'when' statement
 
-    Validates the 'when' switch-like construct in Canto.
-    The 'when' statement matches a subject expression against
-    a series of pattern arms, executing the first match.
+    Tests all three arm forms:
+      1. Integer equality:  1: { ... }          matches subject == 1
+      2. Predicate:         . > 4: { ... }       matches subject satisfies condition
+                            (dot '.' is the subject itself)
+      3. String equality:   "hello": { ... }     uses strcmp under the hood
 
-    Features tested:
-      1. Basic integer pattern matching
-      2. Optional separators: semicolons between arms
-      3. 'default' arm as catch-all fallback
-      4. No explicit 'break' needed (no fall-through)
+    Separators: semicolons between arms act as explicit breaks (no fall-through).
+    Default arm: '_' catches anything that didn't match.
 ~~
 
-let status 200
-
-when status {
-    200: { write "Success" };   ~ semicolon separator, no fall-through
-    404: { write "Not Found" };
-    500: { write "Error" }
-}
-
-let code 42
+~ -------------------------------------------------------------------
+~ Test 1: Integer equality + _ default
+~ -------------------------------------------------------------------
+let code 2
 
 when code {
-    1:   { write "one" }
-    2:   { write "two" }
-    42:  { write "forty-two" }
-    default: { write "unknown" }
+    1: { write "one" }
+    2: { write "two" };
+    3: { write "three" }
+    _: { write "other" }
 }
 
-~ Expected Terminal Output:
-~ Success
-~ forty-two
+~ -------------------------------------------------------------------
+~ Test 2: Predicate arms — dot refers to the subject value
+~ -------------------------------------------------------------------
+let score 75
+
+when score {
+    . > 90: { write "A" };
+    . > 75: { write "B" };
+    . > 60: { write "C" };
+    _:      { write "F" }
+}
+
+~ -------------------------------------------------------------------
+~ Test 3: String equality
+~ -------------------------------------------------------------------
+let greeting "hello"
+
+when greeting {
+    "hi":    { write "casual" }
+    "hello": { write "formal" };
+    "hey":   { write "casual" }
+    _:       { write "unknown" }
+}
+
+~ Expected output (one line per test):
+~ two
+~ F
+~ formal

@@ -57,6 +57,14 @@ bool            IsRepl         = false;
 GlobalVariable *TheReplGlobals = nullptr;
 
 // ---------------------------------------------------------------------------
+// 'when' predicate subject
+// ---------------------------------------------------------------------------
+
+// Points to the value of the when-subject while evaluating predicate arms.
+// A bare '.' node resolves to this during predicate pattern evaluation.
+Value *WhenSubject = nullptr;
+
+// ---------------------------------------------------------------------------
 // sym_name — convert a symbol ID to its source text
 // ---------------------------------------------------------------------------
 

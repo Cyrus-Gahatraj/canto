@@ -586,21 +586,33 @@ static Node* parse_when_stmt(Parser* parser) {
 
         Span arm_start = current(parser)->span;
         Node *arm = make_node(parser, NODE_WHEN_ARM, arm_start);
-        arm->when_arm.pattern = NULL;
-        arm->when_arm.is_else = false;
+        arm->when_arm.pattern      = NULL;
+        arm->when_arm.is_else      = false;
+        arm->when_arm.is_predicate = false;
 
-        // Check for 'default' pattern
+        // Detect catch-all arm: '_' (preferred) or 'default' (also accepted)
         if (check(parser, TK_IDENT)) {
             Token tk = *current(parser);
             const Symbol *s = &parser->symbols->syms[tk.sym];
-            if (s->length == 7 && strncmp(s->start, "default", 7) == 0) {
-                next(parser); // consume 'default'
+            bool is_underscore = (s->length == 1 && s->start[0] == '_');
+            bool is_default    = (s->length == 7 && strncmp(s->start, "default", 7) == 0);
+            if (is_underscore || is_default) {
+                next(parser); // consume '_' or 'default'
                 arm->when_arm.is_else = true;
             }
         }
 
-        // If not default, parse the pattern expression
-        if (!arm->when_arm.is_else) {
+        // Dot-prefixed predicate arm: '. > 4' means (subject > 4)
+        // parse_expression sees the bare dot first (via parse_dot_prefix), then
+        // parses the binary operator, giving: NODE_BINARY { NODE_DOT(bare), op, rhs }
+        if (!arm->when_arm.is_else && check(parser, TK_DOT)) {
+            arm->when_arm.is_predicate = true;
+            arm->when_arm.pattern = parse_expression(parser);
+            if (!arm->when_arm.pattern) break;
+        }
+
+        // Ordinary equality pattern: integer, float, string literal, or variable
+        if (!arm->when_arm.is_else && !arm->when_arm.is_predicate) {
             arm->when_arm.pattern = parse_expression(parser);
             if (!arm->when_arm.pattern) break;
         }
@@ -619,7 +631,7 @@ static Node* parse_when_stmt(Parser* parser) {
         arms[count++] = arm;
 
         skip_trivia(parser);
-        // Let the comma go and let the semi colon break (optional comma or semicolon separator)
+        // Comma or semicolon between arms are both allowed (semicolon acts as break)
         while (match(parser, TK_COMMA) || match(parser, TK_SEMICOLON)) {
             skip_trivia(parser);
         }

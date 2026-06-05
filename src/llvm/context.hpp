@@ -98,3 +98,11 @@ std::string sym_name(uint32_t sym_id);
 // Load/store a variable slot in the REPL global storage array
 llvm::Value *repl_load(uint32_t sym_id);
 llvm::Value *repl_store(uint32_t sym_id, llvm::Value *val);
+
+// ---------------------------------------------------------------------------
+// 'when' predicate subject — the value that '.' refers to in predicate arms
+// ---------------------------------------------------------------------------
+
+// Set to the current when-subject while evaluating a predicate arm pattern.
+// A bare '.' node in the expression resolves to this value.
+extern llvm::Value *WhenSubject;

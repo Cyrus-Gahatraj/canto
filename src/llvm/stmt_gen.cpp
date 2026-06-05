@@ -207,39 +207,72 @@ static Value* gen_if(Node *node) {
     return ConstantInt::get(Builder->getInt32Ty(), 0);
 }
 
-// Helper to generate a type-aware equality comparison
+// Helper: generate a type-aware equality comparison between two values.
+//
+// Handles three cases:
+//   - Strings (pointer types): call strcmp, check result == 0
+//   - Floats (double): use LLVM ordered float-equal comparison
+//   - Integers: widen to the larger bit-width then use integer equal comparison
 static Value* create_eq_comparison(Value *L, Value *R) {
     if (!L || !R) return nullptr;
+
+    // String comparison: any pointer operand → use strcmp
+    // icmp eq on pointers compares addresses (wrong); strcmp compares content
+    if (L->getType()->isPointerTy() || R->getType()->isPointerTy()) {
+        Function *strcmp_fn = get_or_declare_strcmp();
+        Value *cmp = Builder->CreateCall(strcmp_fn, {L, R}, "strcmp.res");
+        // strcmp returns 0 when the strings are equal
+        return Builder->CreateICmpEQ(cmp, ConstantInt::get(Builder->getInt32Ty(), 0), "streq");
+    }
+
+    // Float comparison: promote both sides to double first
     bool is_float = L->getType()->isDoubleTy() || R->getType()->isDoubleTy();
     if (is_float) {
         L = coerce_value(L, Type::getDoubleTy(*TheContext));
         R = coerce_value(R, Type::getDoubleTy(*TheContext));
         return Builder->CreateFCmpOEQ(L, R, "feq");
-    } else {
-        if (L->getType() != R->getType()) {
-            if (L->getType()->isIntegerTy() && R->getType()->isIntegerTy()) {
-                Type *target_ty = L->getType()->getIntegerBitWidth() > R->getType()->getIntegerBitWidth()
-                                  ? L->getType() : R->getType();
-                L = coerce_value(L, target_ty);
-                R = coerce_value(R, target_ty);
-            }
-        }
-        return Builder->CreateICmpEQ(L, R, "ieq");
     }
+
+    // Integer comparison: widen to the larger bit-width if sizes differ
+    if (L->getType() != R->getType() &&
+        L->getType()->isIntegerTy() && R->getType()->isIntegerTy()) {
+        Type *wide = L->getType()->getIntegerBitWidth() > R->getType()->getIntegerBitWidth()
+                     ? L->getType() : R->getType();
+        L = coerce_value(L, wide);
+        R = coerce_value(R, wide);
+    }
+    return Builder->CreateICmpEQ(L, R, "ieq");
 }
 
 // ---------------------------------------------------------------------------
 // NODE_WHEN — pattern matching switch-like statement
+//
+// Syntax:
+//   when value {
+//       1:    { write "one" }     — equality match: value == 1
+//       . > 5: { write "big" }   — predicate: value > 5  (dot = subject)
+//       _:    { write "other" }  — catch-all default
+//   }
+//
+// Implementation:
+//   We chain basic blocks: for each arm we emit a condition check that
+//   branches to the arm body on match, or falls to the next arm's check.
+//   At the end all paths converge at a single merge block.
 // ---------------------------------------------------------------------------
 static Value* gen_when(Node *node) {
     Function *fn = Builder->GetInsertBlock()->getParent();
 
-    // Evaluate the subject expression
+    // Evaluate the subject expression once and keep the value
     Value *subject_val = expr_gen(node->when.subject);
     if (!subject_val) return nullptr;
 
-    BasicBlock *merge_bb = BasicBlock::Create(*TheContext, "when.merge", fn);
+    BasicBlock *merge_bb     = BasicBlock::Create(*TheContext, "when.merge", fn);
     BasicBlock *curr_cond_bb = Builder->GetInsertBlock();
+
+    // Save and set WhenSubject so that bare '.' nodes inside predicate arm
+    // patterns resolve to the subject value
+    Value *saved_subject = WhenSubject;
+    WhenSubject = subject_val;
 
     for (uint32_t i = 0; i < node->when.arm_count; i++) {
         Node *arm = node->when.arms[i];
@@ -247,47 +280,60 @@ static Value* gen_when(Node *node) {
         BasicBlock *body_bb = BasicBlock::Create(*TheContext, "when.body", fn);
 
         if (arm->when_arm.is_else) {
-            // Default arm: jump unconditionally from current cond block to body
+            // '_' or 'default' arm: jump unconditionally to the body
             Builder->SetInsertPoint(curr_cond_bb);
             Builder->CreateBr(body_bb);
 
-            // Emit body
             Builder->SetInsertPoint(body_bb);
             stmt_gen(arm->when_arm.body);
-            if (!Builder->GetInsertBlock()->getTerminator()) {
+            if (!Builder->GetInsertBlock()->getTerminator())
                 Builder->CreateBr(merge_bb);
-            }
 
             curr_cond_bb = nullptr;
             break;
+
         } else {
             BasicBlock *next_cond_bb = BasicBlock::Create(*TheContext, "when.cond", fn);
-
-            // Emit condition check in curr_cond_bb
             Builder->SetInsertPoint(curr_cond_bb);
-            Value *pattern_val = expr_gen(arm->when_arm.pattern);
-            if (!pattern_val) return nullptr;
 
-            Value *eq = create_eq_comparison(subject_val, pattern_val);
-            if (!eq) return nullptr;
+            Value *cond_val = nullptr;
 
-            Builder->CreateCondBr(ensure_bool(eq, "whencond"), body_bb, next_cond_bb);
+            if (arm->when_arm.is_predicate) {
+                // Predicate arm: '. op expr' — the pattern IS the condition
+                // WhenSubject is already set so the '.' in the pattern resolves
+                // to subject_val. Just evaluate and treat as boolean.
+                cond_val = expr_gen(arm->when_arm.pattern);
+                if (!cond_val) { WhenSubject = saved_subject; return nullptr; }
+                cond_val = ensure_bool(cond_val, "whencond");
+            } else {
+                // Equality arm: pattern == subject
+                Value *pattern_val = expr_gen(arm->when_arm.pattern);
+                if (!pattern_val) { WhenSubject = saved_subject; return nullptr; }
+                Value *eq = create_eq_comparison(subject_val, pattern_val);
+                if (!eq) { WhenSubject = saved_subject; return nullptr; }
+                cond_val = ensure_bool(eq, "whencond");
+            }
+
+            Builder->CreateCondBr(cond_val, body_bb, next_cond_bb);
 
             // Emit body
             Builder->SetInsertPoint(body_bb);
             stmt_gen(arm->when_arm.body);
-            if (!Builder->GetInsertBlock()->getTerminator()) {
+            if (!Builder->GetInsertBlock()->getTerminator())
                 Builder->CreateBr(merge_bb);
-            }
 
             curr_cond_bb = next_cond_bb;
         }
     }
 
+    // If no arm matched (and there was no default), just fall to merge
     if (curr_cond_bb) {
         Builder->SetInsertPoint(curr_cond_bb);
         Builder->CreateBr(merge_bb);
     }
+
+    // Restore WhenSubject for any outer when statement
+    WhenSubject = saved_subject;
 
     Builder->SetInsertPoint(merge_bb);
     return ConstantInt::get(Builder->getInt32Ty(), 0);

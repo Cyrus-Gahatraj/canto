@@ -267,6 +267,20 @@ Value* expr_gen(Node *node) {
         case NODE_GROUP:
             return expr_gen(node->group.expr);
 
+        // Bare dot: '.' inside a when predicate arm — refers to the subject value
+        // Example: when x { . > 4: { write "big" } }
+        //   Here '.' resolves to the current value of x
+        case NODE_DOT:
+            if (node->dot.left == nullptr && node->dot.field_sym == 0) {
+                if (!WhenSubject) {
+                    fprintf(stderr, "Compiler Error: '.' used outside of a when predicate arm\n");
+                    return nullptr;
+                }
+                return WhenSubject;
+            }
+            fprintf(stderr, "Compiler Error: Unhandled dot expression in when predicate\n");
+            return nullptr;
+
         // A bare keyword used as an expression evaluates to 0
         case NODE_KEYWORD:
             return ConstantInt::get(Builder->getInt32Ty(), 0);
