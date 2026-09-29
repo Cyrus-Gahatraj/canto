@@ -1,28 +1,34 @@
-use std::path::Path;
 use std::process::Command;
 
 fn main() {
-    // gperf
-    let gperf_input = "src/internal/keyword_lookup.gperf";
-    let gperf_output = "src/internal/keyword_lookup.c";
+    // gperf — keyword table generated from token_kinds.def
+    let token_kinds = "include/private/token_kinds.def";
+    let out_dir = std::env::var("OUT_DIR").unwrap();
+    let gperf_input = format!("{}/keyword_lookup.gperf", out_dir);
+    let gperf_output = format!("{}/keyword_lookup.c", out_dir);
 
-    if Path::new(gperf_input).exists() {
-        Command::new("gperf")
-            .arg("--output-file")
-            .arg(gperf_output)
-            .arg("-L")
-            .arg("ANSI-C")
-            .arg("-t")
-            .arg("-C")
-            .arg("-c")
-            .arg("-N")
-            .arg("lookup_keyword")
-            .arg("-E")
-            .arg(gperf_input)
-            .status()
-            .expect("Failed to execute gperf");
+    let mut gperf = String::from(
+        "%{\n#include \"canto/token.h\"\n#include <string.h>\n%}\n\
+         struct keyword { char* name; int token; };\n%%\n",
+    );
+    for line in std::fs::read_to_string(token_kinds).unwrap().lines() {
+        // TK_KW(LET,       "let")  → let, TK_KW_LET   (NULL-text markers skipped)
+        let Some(args) = line.trim().strip_prefix("TK_KW(") else { continue };
+        let Some((name, text)) = args.split_once(',') else { continue };
+        let Some(text) = text.split('"').nth(1) else { continue };
+        gperf.push_str(&format!("{}, TK_KW_{}\n", text, name.trim()));
     }
-    println!("cargo:rerun-if-changed={}", gperf_input);
+    gperf.push_str("%%\n");
+    std::fs::write(&gperf_input, gperf).unwrap();
+
+    let status = Command::new("gperf")
+        .args(["--output-file", &gperf_output])
+        .args(["-L", "ANSI-C", "-t", "-C", "-c", "-N", "lookup_keyword", "-E"])
+        .arg(&gperf_input)
+        .status()
+        .expect("Failed to execute gperf — is it installed?");
+    assert!(status.success(), "gperf failed");
+    println!("cargo:rerun-if-changed={}", token_kinds);
     println!("cargo:rerun-if-changed=src/c/");
     println!("cargo:rerun-if-changed=src/llvm/");
 
@@ -42,6 +48,7 @@ fn main() {
     // C
     cc::Build::new()
         .include("src")
+        .include(&out_dir)
         .include("include")
         .files(
             keyword_files
