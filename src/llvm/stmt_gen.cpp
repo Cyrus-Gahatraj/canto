@@ -32,6 +32,7 @@ Value* gen_edit(Node *node);
 Value* gen_fn(Node *node);
 Value* gen_call(Node *node);
 Value* gen_return(Node *node);
+Value* gen_get(Node *node);
 
 // ---------------------------------------------------------------------------
 // NODE_WRITE — print values to stdout
@@ -72,7 +73,7 @@ static Value* gen_write(Node *node) {
     for (uint32_t i = 0; i < node->write.count; i++) {
         Node  *arg = node->write.exprs[i];
         Value *val = expr_gen(arg);
-        if (!val) continue;
+        if (!val) return nullptr;
 
         Type *ty = val->getType();
 
@@ -467,7 +468,7 @@ static Value* gen_break(Node *node) {
 static Value* gen_block(Node *node) {
     Value *last = nullptr;
     for (uint32_t i = 0; i < node->block.count; i++)
-        last = stmt_gen(node->block.stmts[i]);
+        if (!(last = stmt_gen(node->block.stmts[i]))) return nullptr;
     return last;
 }
 
@@ -486,6 +487,7 @@ Value* stmt_gen(Node *node) {
         case NODE_FN:       return gen_fn(node);
         case NODE_CALL:     return gen_call(node);
         case NODE_RETURN:   return gen_return(node);
+        case NODE_GET:      return gen_get(node);
         case NODE_WRITE:    return gen_write(node);
         case NODE_IF:       return gen_if(node);
         case NODE_WHEN:     return gen_when(node);

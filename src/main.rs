@@ -17,7 +17,7 @@ use std::{
 #[derive(Parser)]
 #[command(
     name    = "canto",
-    version = "0.1.0",
+    version = env!("CARGO_PKG_VERSION"),
     author  = "Cyrus Gahatraj",
     about   = "The Canto language CLI",
     long_about = "Canto is a poetic, configurable programming language.\n\
@@ -42,13 +42,65 @@ enum Commands {
     Run {
         path: String,
     },
+
+    /// Create a new Canto project
+    ///
+    /// Example:
+    ///   canto init hello
+    Init {
+        /// Folder to create the project in (default: the current folder)
+        path: Option<String>,
+    },
+
+    /// Update canto to the latest version
+    ///
+    /// Re-runs install.sh, which rebuilds from the main branch
+    /// (or $CANTO_BRANCH).
+    Update,
+}
+
+const INSTALL_URL: &str = "https://raw.githubusercontent.com/Cyrus-Gahatraj/canto/main/install.sh";
+
+/// Rebuilds canto from the latest source with the install script.
+/// On Windows canto runs inside WSL, so this always runs under sh.
+fn update() -> Result<(), Box<dyn Error>> {
+    println!("Updating canto {} ...", env!("CARGO_PKG_VERSION"));
+    let status = process::Command::new("sh")
+        .arg("-c")
+        .arg(format!("curl -fsSL {} | sh", INSTALL_URL))
+        .status()?;
+    if !status.success() {
+        return Err("the install script failed".into());
+    }
+    Ok(())
+}
+
+/// Files `canto init` writes, from templates/init/
+const INIT_FILES: &[(&str, &str)] = &[
+    ("main.ct",          include_str!("../templates/init/main.ct")),
+    ("editor/write.ct",  include_str!("../templates/init/editor/write.ct")),
+    ("editor/types.ct",  include_str!("../templates/init/editor/types.ct")),
+];
+
+/// Writes a new project into `dir`. Refuses to overwrite existing files.
+fn init_project(dir: &Path) -> Result<(), Box<dyn Error>> {
+    for (name, _) in INIT_FILES {
+        if dir.join(name).exists() {
+            return Err(format!("{} already exists", dir.join(name).display()).into());
+        }
+    }
+    for (name, contents) in INIT_FILES {
+        let path = dir.join(name);
+        std::fs::create_dir_all(path.parent().unwrap())?;
+        std::fs::write(&path, contents)?;
+    }
+    println!("Created a Canto project in {}", dir.display());
+    println!("Run it with:  canto run {}", dir.join("main.ct").display());
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
-    let build_dir = "build";
-    let tmp_dir =  build_dir.to_owned() + "/.tmp";
-    std::fs::create_dir_all(&tmp_dir)?;
 
     match &cli.command {
         Some(Commands::Build { path }) => {
@@ -56,6 +108,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         },
         Some(Commands::Run { path }) => {
             let _ = build_executable(path.to_string(), true);
+        },
+        Some(Commands::Update) => {
+            if let Err(e) = update() {
+                eprintln!("Error: {}", e);
+                process::exit(1);
+            }
+        },
+        Some(Commands::Init { path }) => {
+            if let Err(e) = init_project(Path::new(path.as_deref().unwrap_or("."))) {
+                eprintln!("Error: {}", e);
+                process::exit(1);
+            }
         },
         None => {
             let mut engine = Engine::new(true);
@@ -102,6 +166,7 @@ fn build_executable(path: String, execute: bool) -> Result<(), Box<dyn Error>> {
         .arg("-Wno-override-module") // Quiets target triple overrides warning
         .arg("-o")
         .arg(&bin_out)
+        .args(engine.link_libs())
         .status();
 
     match status {

@@ -1,0 +1,6 @@
+~ Module for modules.ct. Paths in `get` are relative to this file.
+get consts
+
+let square(x) {
+    return x * x
+}

@@ -9,6 +9,7 @@ AST_NODE(FIELD,       "Design Field")
 AST_NODE(PARAM,       "Function Parameter")
 AST_NODE(RETURN,      "Return Statement")
 AST_NODE(BLOCK,       "Block Expression/Statement")
+AST_NODE(GET,         "C Library Import (get)")
 
 /* Standard Expressions */
 AST_NODE(BINARY,      "Binary Operation")

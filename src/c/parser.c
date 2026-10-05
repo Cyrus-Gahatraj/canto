@@ -327,7 +327,7 @@ static Node* parse_let_declaration(Parser* parser) {
     skip_trivia(parser);
 
     // ── function: let name(params) { body }
-    // Scan ahead: if (...) is followed by {, it's a function definition.
+    // Scan ahead: if (...) is followed by { or a `: type`, it's a function.
     // Otherwise (e.g. let a (5)) it's a regular let with parenthesized expr.
     bool is_fn = false;
     if (check(parser, TK_LPAREN)) {
@@ -342,7 +342,7 @@ static Node* parse_let_declaration(Parser* parser) {
         if (check(parser, TK_RPAREN)) {
             next(parser);
             skip_trivia(parser);
-            is_fn = check(parser, TK_LBRACE);
+            is_fn = check(parser, TK_LBRACE) || check(parser, TK_COLON);
         }
         parser->cursor = saved;
     }
@@ -611,6 +611,17 @@ static Node* parse_when_stmt(Parser* parser) {
             if (!arm->when_arm.pattern) break;
         }
 
+        // Bare comparison arm: '> 90' is short for '. > 90'
+        if (!arm->when_arm.is_else && !arm->when_arm.is_predicate &&
+            (check(parser, TK_GT) || check(parser, TK_LT) || check(parser, TK_GEQ) ||
+             check(parser, TK_LEQ) || check(parser, TK_EQUAL) || check(parser, TK_NOT_EQUAL))) {
+            Node *dot = make_node(parser, NODE_DOT, current(parser)->span);
+            dot->dot.left      = NULL;
+            dot->dot.field_sym = 0;
+            arm->when_arm.is_predicate = true;
+            arm->when_arm.pattern = parse_binary(parser, dot);
+        }
+
         // Ordinary equality pattern: integer, float, string literal, or variable
         if (!arm->when_arm.is_else && !arm->when_arm.is_predicate) {
             arm->when_arm.pattern = parse_expression(parser);
@@ -790,6 +801,112 @@ static Node* parse_dot_dot_infix(Parser* parser, Node* left) {
     return node;
 }
 
+// get lib/mathx                         → Canto module
+// get c:m { sqrt(x: double): double }    → C library + its functions
+// The path may also be quoted ("my dir/x") when it has spaces.
+// A "c:" prefix names a C library to link ("c:" alone or no path = libc)
+// and the optional block declares its functions. Any other string is a
+// .ct file, relative to this one, that compile() loads in place.
+static Node* parse_get(Parser* parser) {
+	Span start = current(parser)->span;
+	next(parser);	// consume 'get'
+	while (check(parser, TK_WHITESPACE)) next(parser);
+
+	uint32_t lib_sym = 0;
+	bool is_canto = false;
+	if (check(parser, TK_STRING_LIT)) {
+		lib_sym = next(parser).sym;
+	} else {
+		// unquoted path: the raw source text up to a space, newline or '{'
+		uint32_t from = current(parser)->span.start, to = from;
+		while (!check(parser, TK_WHITESPACE) && !check(parser, TK_NEWLINE) &&
+		       !check(parser, TK_LINE_COMMENT) && !check(parser, TK_BLOCK_COMMENT) &&
+		       !check(parser, TK_LBRACE) && !check(parser, TK_SEMICOLON) &&
+		       !check(parser, TK_LEX_EOF)) {
+			Span sp = next(parser).span;
+			to = sp.start + sp.length;
+		}
+		if (to > from) {
+			Symbol path = { .start = parser->map->source_buffer + from, .length = to - from };
+			lib_sym = intern_symbol(parser->symbols, &path);
+		}
+	}
+	if (lib_sym) {
+		const Symbol *s = &parser->symbols->syms[lib_sym];
+		is_canto = !(s->length >= 2 && memcmp(s->start, "c:", 2) == 0);
+		while (check(parser, TK_WHITESPACE)) next(parser);
+	}
+	// reported after the block is parsed, so it doesn't cascade
+	bool bad_block = is_canto && check(parser, TK_LBRACE);
+	Span block_span = current(parser)->span;
+
+	Node **decls = NULL;
+	uint32_t count = 0, cap = 0;
+
+	if (match(parser, TK_LBRACE)) {
+		skip_trivia(parser);
+		while (!check(parser, TK_RBRACE) && !check(parser, TK_LEX_EOF) && !parser->had_error) {
+			Span decl_start = current(parser)->span;
+			Token name = expect_token(parser, TK_IDENT, "expected C function name in 'get' block");
+			expect_token(parser, TK_LPAREN, "expected '(' after C function name");
+			skip_trivia(parser);
+
+			Node **params = NULL;
+			uint32_t pcount = 0, pcap = 0;
+			while (!check(parser, TK_RPAREN) && !check(parser, TK_LEX_EOF) && !parser->had_error) {
+				Node *p = parse_param(parser);
+				if (pcount >= pcap) {
+					pcap   = pcap ? pcap * 2 : 4;
+					params = realloc(params, pcap * sizeof(Node*));
+				}
+				params[pcount++] = p;
+				skip_trivia(parser);
+				if (!match(parser, TK_COMMA)) break;
+				skip_trivia(parser);
+			}
+			expect_token(parser, TK_RPAREN, "expected ')' after parameters");
+
+			// return type; none means void
+			Node *ret = NULL;
+			while (check(parser, TK_WHITESPACE)) next(parser);
+			if (match(parser, TK_COLON)) {
+				Token rt = expect_token(parser, TK_IDENT, "expected return type after ':'");
+				ret = make_node(parser, NODE_IDENT, rt.span);
+				ret->ident.sym = rt.sym;
+			}
+
+			Node *fn = make_node(parser, NODE_FN, decl_start);
+			fn->fn.name_sym    = name.sym;
+			fn->fn.params      = params;
+			fn->fn.param_count = pcount;
+			fn->fn.body        = NULL;
+			fn->fn.return_type = ret;
+
+			if (count >= cap) {
+				cap   = cap ? cap * 2 : 4;
+				decls = realloc(decls, cap * sizeof(Node*));
+			}
+			decls[count++] = fn;
+
+			skip_trivia(parser);
+			while (match(parser, TK_COMMA) || match(parser, TK_SEMICOLON)) skip_trivia(parser);
+		}
+		expect_token(parser, TK_RBRACE, "expected '}' to close 'get' block");
+	}
+
+	if (bad_block) {
+		append_diag(parser->diags, "a Canto module takes no '{ }' block; use c:name for a C library", block_span, DIAG_PHASE_PARSE, DIAG_ERROR);
+		parser->had_error = true;
+	}
+
+	Node *node = make_node(parser, NODE_GET, start);
+	node->get.lib_sym    = lib_sym;
+	node->get.is_canto   = is_canto;
+	node->get.decls      = decls;
+	node->get.decl_count = count;
+	return node;
+}
+
 static Node* parse_continue(Parser* parser) {
 	Span start = current(parser)->span;
 	next(parser);
@@ -836,6 +953,7 @@ static Node* parse_stmt(Parser* parser) {
 		case TK_KW_CONTINUE: return parse_continue(parser);
 		case TK_KW_BREAK: return parse_break(parser);
 		case TK_KW_RETURN: return parse_return(parser);
+		case TK_KW_GET: return parse_get(parser);
         case TK_LEX_EOF: return NULL;
         default: {
             if (check(parser, TK_IDENT)) {

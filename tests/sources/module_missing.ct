@@ -1,0 +1,2 @@
+~ Importing a module that doesn't exist is a compile error.
+get lib/nothing_here

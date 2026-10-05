@@ -19,7 +19,7 @@ $ canto run sonnet.ct
 Thou art more lovely than a summer day
 ```
 
-> **Status:** early and experimental (v0.1.0). The syntax is still changing, and several reserved keywords (`design`, `try`, `ask`, `get`, `optional`, `error`) are not implemented yet.
+> **Status:** early and experimental (v0.1.0). The syntax is still changing, and several reserved keywords (`design`, `try`, `ask`, `optional`, `error`) are not implemented yet.
 
 ## A tour of the language
 
@@ -101,13 +101,13 @@ if machine_on | loop {     ~ while machine_on is true
 
 ### Pattern matching: `when`
 
-An arm matches either a value (numbers or strings) or a predicate, where `.` is the value being matched. `_` is the default arm. The first arm that matches runs.
+An arm matches either a value (numbers or strings) or a predicate, where `.` is the value being matched. An arm that starts with a comparison like `> 90` can leave out the `.`. `_` is the default arm. The first arm that matches runs.
 
 ```
 when score {
-    . > 90: { write "A" }
-    . > 75: { write "B" }
-    . > 60: { write "C" }
+    > 90:   { write "A" }
+    > 75:   { write "B" }
+    . > 60 and . < 70: { write "C" }
     _:      { write "F" }
 }
 
@@ -134,7 +134,35 @@ let hypot2(a, b) {
 write hypot2(3, 4)    ~ 25
 ```
 
-For now, all parameters and return values are 64-bit integers.
+A function takes any type of value. Each call compiles a copy for the types it passes, and the return type comes from the first `return`:
+
+```
+let add(a, b) {
+    return a + b
+}
+
+write add(2, 3)         ~ 5
+write add(1.5, 2.25)    ~ 3.750000
+
+let pick(flag, a, b) {
+    if flag { return a }
+    return b
+}
+
+write pick(true, "yes", "no")   ~ yes
+```
+
+You can annotate parameters and the return type to fix them. Arguments are then converted to that type:
+
+```
+let scale(x: double, k): double {
+    return x * k
+}
+
+write scale(3, 2)       ~ 6.000000
+```
+
+All the `return`s in one function must have the same type.
 
 ### Arrays and custom types
 
@@ -158,13 +186,53 @@ write "world"                        ~ → hello world
 
 By convention, a keyword variant has a PascalCase name so it stands out from ordinary variables.
 
+### Modules and C libraries: `get`
+
+`get` with a path pulls in another Canto file. The path needs no quotes (add them if it has spaces) and is relative to the importing file, and `.ct` is optional. If the path is a folder, every `.ct` file in it loads, in name order. The file's top-level code runs at the point of the `get`, and its functions and variables are visible after it. A file only loads once, so repeated or circular imports are safe.
+
+```
+get lib/mathx          ~ loads lib/mathx.ct
+
+write square(7)
+```
+
+A `c:` prefix means a C library instead. The block declares the functions to use from it. Leave out the name to use the C standard library. The C types are `int`, `long`, `char`, `float`, `double`, `string`, `ptr` and `void`.
+
+```
+get c:m {              ~ links libm
+    sqrt(x: double): double
+}
+
+get {                  ~ libc
+    puts(s: string): int
+}
+
+write sqrt(16.0)
+```
+
+Modules share one namespace, so a name defined in two files clashes.
+
 ## Using the CLI
 
 ```sh
+canto init my-project         # start a project (or `canto init` for the current folder)
+canto update                  # rebuild canto from the latest source
 canto run path/to/file.ct     # compile to a native binary and run it
 canto build path/to/file.ct   # compile to ./build/<name>
 canto                         # start the interactive REPL (type `exit` to quit)
 ```
+
+`canto init` creates a project like this:
+
+```
+main.ct          get editor
+                 write "hello world"
+editor/
+  write.ct       write variants, like Writef (no newline)
+  types.ct       array types: Strings, Ints, Doubles, Bools
+```
+
+`get editor` loads the whole `editor` folder. Edit those files to reshape the keywords your project uses, or add new ones.
 
 Source files use the `.ct` extension. `build` and `run` generate LLVM IR, link it with `clang -O2`, and write the executable to `./build/`. The REPL instead compiles each line in memory with LLVM's ORC JIT, and your variables persist from one line to the next.
 

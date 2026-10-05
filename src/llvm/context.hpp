@@ -51,6 +51,13 @@ extern std::map<std::string, llvm::AllocaInst*> NamedValues;
 // The Canto symbol table — maps symbol IDs to their source text
 extern SymTable *TheSymtable;
 
+// Canto function definitions by name (defined in fn_gen.cpp). Each one is
+// compiled per call-site argument types, so it can take any value.
+extern std::map<std::string, Node*> FnTemplates;
+
+// Linker flags collected from `get` statements (defined in fn_gen.cpp)
+extern std::string LinkLibs;
+
 // ---------------------------------------------------------------------------
 // Loop tracking — needed to wire up break/continue jumps
 // ---------------------------------------------------------------------------

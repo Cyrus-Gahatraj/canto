@@ -1,0 +1,10 @@
+~~
+    Circular Import Test
+
+    lib/ping.ct and lib/pong.ct import each other. Each module runs once,
+    in import order: pong finishes first because ping imports it.
+~~
+
+get lib/ping
+get lib/pong
+write "done"

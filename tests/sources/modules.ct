@@ -1,0 +1,18 @@
+~~
+    Module System Test
+
+    `get path` compiles another .ct file in place. The path is relative
+    to the importing file and `.ct` is optional. A module is loaded once,
+    however many times it is imported.
+    `get c:lib { ... }` declares C functions from a C library instead.
+~~
+
+get lib/mathx
+get "lib/consts.ct"     ~ quotes are optional
+
+get c:m {
+    sqrt(x: double): double
+}
+
+write square(answer)
+write sqrt(16.0)

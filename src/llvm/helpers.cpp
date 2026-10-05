@@ -42,12 +42,16 @@ Value* coerce_value(Value *val, Type *target_type) {
     if (src == target_type) return val;
 
     // int → double
-    if (target_type->isDoubleTy() && src->isIntegerTy())
+    if (target_type->isFloatingPointTy() && src->isIntegerTy())
         return Builder->CreateSIToFP(val, target_type, "to_f64");
 
     // double → int
-    if (target_type->isIntegerTy() && src->isDoubleTy())
+    if (target_type->isIntegerTy() && src->isFloatingPointTy())
         return Builder->CreateFPToSI(val, target_type, "to_int");
+
+    // float ↔ double
+    if (target_type->isFloatingPointTy() && src->isFloatingPointTy())
+        return Builder->CreateFPCast(val, target_type, "fp_cast");
 
     // int → int (different bit widths)
     if (target_type->isIntegerTy() && src->isIntegerTy())

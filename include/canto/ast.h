@@ -152,6 +152,15 @@ struct Node {
             Node*     return_type;
         } fn;
 
+		// get c:lib { name(params): ret }  /  get file (Canto module)
+		// decls are NODE_FN with body = NULL
+		struct {
+			uint32_t lib_sym;    // "c:lib", or module path when is_canto; 0 = none (libc)
+			bool     is_canto;
+			Node**   decls;
+			uint32_t decl_count;
+		} get;
+
 		struct {
             uint32_t  name_sym;
             uint32_t  parent_sym;  // 0 = no parent 

@@ -43,6 +43,65 @@ fn arrays_test() {
 
 #[test]
 fn when_test() {
-    // Tests integer equality, predicate (dot) arms, and string equality
-    CantoTest::new("when.ct").assert_output("two\nC\nformal");
+    // Tests integer equality, predicate arms (with and without '.'), and string equality
+    CantoTest::new("when.ct").assert_output("two\nC\nformal\nB");
+}
+
+#[test]
+fn get_test() {
+    CantoTest::new("get.ct").assert_output("4.000000\n1024.000000\n43\n5\nhello from libc");
+}
+
+#[test]
+fn modules_test() {
+    CantoTest::new("modules.ct").assert_output("1764\n4.000000");
+}
+
+#[test]
+fn module_cycle_test() {
+    CantoTest::new("module_cycle.ct").assert_output("pong\nping\ndone");
+}
+
+#[test]
+fn module_missing_test() {
+    CantoTest::new("module_missing.ct").assert_compile_error("cannot find module");
+}
+
+#[test]
+fn module_block_test() {
+    CantoTest::new("module_block.ct").assert_compile_error("a Canto module takes no '{ }' block");
+}
+
+#[test]
+fn functions_any_test() {
+    CantoTest::new("functions_any.ct")
+        .assert_output("5\n3.750000\n2.500000\ntrue\nyes\n2.500000\n6.000000\nloud\ntrue");
+}
+
+#[test]
+fn functions_mixed_return_test() {
+    CantoTest::new("functions_mixed_return.ct")
+        .assert_compile_error("returns must all have the same type");
+}
+
+#[test]
+fn init_test() {
+    // `canto init` writes a project whose main.ct runs as-is
+    let canto = env!("CARGO_BIN_EXE_canto");
+    let dir = std::env::temp_dir().join("canto_init_test");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let init = std::process::Command::new(canto).arg("init").arg(&dir).output().unwrap();
+    assert!(init.status.success(), "{}", String::from_utf8_lossy(&init.stderr));
+    assert!(dir.join("editor/write.ct").exists());
+
+    let run = std::process::Command::new(canto)
+        .args(["run", "main.ct"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "hello world");
+
+    let again = std::process::Command::new(canto).arg("init").arg(&dir).output().unwrap();
+    assert!(!again.status.success(), "init must not overwrite a project");
 }

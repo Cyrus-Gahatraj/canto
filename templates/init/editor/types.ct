@@ -1,0 +1,8 @@
+~~
+    Array types, used like:  let names :Strings ["ada", "alan"]
+~~
+
+let Strings type.edit { .name: "string", .is_many: true }
+let Ints    type.edit { .name: "int",    .is_many: true }
+let Doubles type.edit { .name: "double", .is_many: true }
+let Bools   type.edit { .name: "bool",   .is_many: true }

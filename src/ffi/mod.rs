@@ -37,6 +37,14 @@ impl Engine {
     }
 }
 
+impl Engine {
+    /// Linker flags from `get` statements in the last compile, e.g. ["-lm"].
+    pub fn link_libs(&self) -> Vec<String> {
+        let libs = unsafe { std::ffi::CStr::from_ptr(ffi::codegen_link_libs()) };
+        libs.to_string_lossy().split_whitespace().map(String::from).collect()
+    }
+}
+
 impl Drop for Engine {
     fn drop(&mut self) {
         unsafe {
