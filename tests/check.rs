@@ -71,3 +71,15 @@ fn module_missing_test() {
 fn module_block_test() {
     CantoTest::new("module_block.ct").assert_compile_error("a Canto module takes no '{ }' block");
 }
+
+#[test]
+fn functions_any_test() {
+    CantoTest::new("functions_any.ct")
+        .assert_output("5\n3.750000\n2.500000\ntrue\nyes\n2.500000\n6.000000\nloud\ntrue");
+}
+
+#[test]
+fn functions_mixed_return_test() {
+    CantoTest::new("functions_mixed_return.ct")
+        .assert_compile_error("returns must all have the same type");
+}

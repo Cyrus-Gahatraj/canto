@@ -43,6 +43,7 @@ extern "C" void codegen_init(void) {
     LastExprResult  = nullptr;
     TheReplGlobals  = nullptr;
     LinkLibs.clear();
+    FnTemplates.clear();
 
     // Create fresh LLVM objects
     TheContext = std::make_unique<LLVMContext>();
@@ -158,5 +159,6 @@ extern "C" void codegen_free(void) {
     KeywordModifiers.clear();
 
     VariableElementTypes.clear();
+    FnTemplates.clear();
     TheSymtable = nullptr;
 }

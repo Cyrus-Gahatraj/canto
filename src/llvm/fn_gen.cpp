@@ -30,71 +30,102 @@ extern "C" const char* codegen_link_libs(void) {
 // NODE_FN — function definition
 // ---------------------------------------------------------------------------
 
-// Compiles a function definition like:  fn add(a, b) { give a + b }
-//
-// Steps:
-//   1. Build the LLVM function type (return type + parameter types)
-//   2. Create the LLVM Function object
-//   3. Name each parameter
-//   4. Create the entry basic block and switch to it
-//   5. Allocate stack slots for each parameter (so they can be mutated)
-//   6. Generate the function body
-//   7. Add an implicit `return 0` if the body has no explicit return
-//   8. Restore the builder's insert point to wherever we were before
+// A definition only records the function. gen_call compiles it once per set
+// of argument types: add(1, 2) becomes "add(i64,i64)" and add(1.5, "x")
+// becomes "add(double,ptr)". A parameter annotated `x: double` always takes
+// that type. ponytail: a function that is never called is never checked.
+std::map<std::string, Node*> FnTemplates;
+
 Value* gen_fn(Node *node) {
-    std::string name = sym_name(node->fn.name_sym);
+    FnTemplates[sym_name(node->fn.name_sym)] = node;
+    return ConstantInt::get(Builder->getInt32Ty(), 0);
+}
 
-    // All parameters default to i64 (64-bit integer).
-    // Full type inference would be a separate pass.
-    std::vector<Type*> param_types(node->fn.param_count, Type::getInt64Ty(*TheContext));
+// Return types found by a probe compile: probe function → type of its first
+// `return` (void for a bare one). nullptr until a return is seen.
+static std::map<Function*, Type*> ProbeReturns;
 
-    // Default return type: i64
-    Type *ret_type = Type::getInt64Ty(*TheContext);
+// Turns an annotation like `double` into its type. nullptr + error if unknown.
+static Type* annotation_type(Node *ann) {
+    std::string n = sym_name(ann->ident.sym);
+    Type *t = keyword_name_to_llvm_type(n.c_str());
+    if (!t) fprintf(stderr, "Compiler Error: Unknown type '%s' (use int, double, bool or string)\n", n.c_str());
+    return t;
+}
 
-    // Create the LLVM function type:  i64 (i64, i64, ...)
-    FunctionType *fn_type = FunctionType::get(ret_type, param_types, /*isVarArg=*/false);
+// Compiles `def` as a function named `fname`. The function's own scope
+// (parameters, locals, loops) is set up fresh and the caller's is restored.
+static Function* build_fn(Node *def, const std::string &fname,
+                          const std::vector<Type*> &params, Type *ret, bool probe = false) {
+    FunctionType *fn_type = FunctionType::get(ret, params, false);
+    Function *fn = Function::Create(fn_type, Function::ExternalLinkage, fname, TheModule.get());
+    if (probe) ProbeReturns[fn] = nullptr;
 
-    // Create the function in the module with external linkage (callable from outside)
-    Function *fn = Function::Create(fn_type, Function::ExternalLinkage, name, TheModule.get());
+    auto saved_vals  = NamedValues;
+    auto saved_elems = VariableElementTypes;
+    auto saved_loops = LoopStack;
+    Value *saved_subject  = WhenSubject;
+    BasicBlock *saved_bb  = Builder->GetInsertBlock();
+    LoopStack.clear();
+    WhenSubject = nullptr;
 
-    // Give each LLVM argument the name it has in the source
-    uint32_t idx = 0;
+    Builder->SetInsertPoint(BasicBlock::Create(*TheContext, "entry", fn));
     for (auto &arg : fn->args()) {
-        arg.setName(sym_name(node->fn.params[idx]->param.name_sym));
-        idx++;
-    }
-
-    // Save the current insert point so we can restore it after the function
-    BasicBlock *saved_bb = Builder->GetInsertBlock();
-
-    // Create the function's entry basic block and start inserting there
-    BasicBlock *entry = BasicBlock::Create(*TheContext, "entry", fn);
-    Builder->SetInsertPoint(entry);
-
-    // Allocate stack slots for each parameter.
-    // This makes parameters mutable (they can be reassigned inside the function).
-    idx = 0;
-    for (auto &arg : fn->args()) {
-        std::string pname = std::string(arg.getName());
+        std::string pname = sym_name(def->fn.params[arg.getArgNo()]->param.name_sym);
+        arg.setName(pname);
         AllocaInst *slot = alloca_at_entry(fn, arg.getType(), pname);
         Builder->CreateStore(&arg, slot);
         NamedValues[pname] = slot;
-        idx++;
+        if (auto *arr = dyn_cast<ArrayType>(arg.getType()))
+            VariableElementTypes[pname] = arr->getElementType();
     }
 
-    // Generate IR for the function body
-    stmt_gen(node->fn.body);
+    bool ok = stmt_gen(def->fn.body) != nullptr;
 
-    // If the last block has no terminator (no explicit return), add `return 0`
-    if (!Builder->GetInsertBlock()->getTerminator())
-        Builder->CreateRet(ConstantInt::get(ret_type, 0));
+    // falling off the end returns the zero value (0, 0.0, false, null)
+    if (!Builder->GetInsertBlock()->getTerminator()) {
+        if (ret->isVoidTy()) Builder->CreateRetVoid();
+        else                 Builder->CreateRet(Constant::getNullValue(ret));
+    }
 
-    // Restore the builder to where it was before we started this function
-    if (saved_bb)
-        Builder->SetInsertPoint(saved_bb);
+    NamedValues          = saved_vals;
+    VariableElementTypes = saved_elems;
+    LoopStack            = saved_loops;
+    WhenSubject          = saved_subject;
+    if (saved_bb) Builder->SetInsertPoint(saved_bb);
 
-    // The function definition itself evaluates to 0 (it's a statement)
-    return ConstantInt::get(Builder->getInt32Ty(), 0);
+    return ok ? fn : nullptr;
+}
+
+// Compiles one specialization of a Canto function. With no return
+// annotation, the body is first compiled as a throwaway probe (returning
+// i64) to find the type of its first `return`, then compiled for real.
+static Function* specialize(Node *def, const std::string &fname, const std::vector<Type*> &params) {
+    if (def->fn.return_type) {
+        Type *ret = annotation_type(def->fn.return_type);
+        return ret ? build_fn(def, fname, params, ret) : nullptr;
+    }
+
+    Function *before = TheModule->empty() ? nullptr : &TheModule->getFunctionList().back();
+    if (!build_fn(def, fname, params, Builder->getInt64Ty(), true)) return nullptr;
+    Function *probe = TheModule->getFunction(fname);
+    Type *ret = ProbeReturns[probe] ? ProbeReturns[probe] : Builder->getInt64Ty();
+    ProbeReturns.erase(probe);
+    probe->deleteBody();
+
+    if (probe->use_empty()) {
+        probe->eraseFromParent();
+    } else {
+        // Mutual recursion: functions compiled during the probe call it with
+        // its guessed i64 return. Drop them all; they get rebuilt below.
+        std::vector<Function*> made;
+        for (auto it = before ? std::next(before->getIterator()) : TheModule->begin();
+             it != TheModule->end(); ++it)
+            made.push_back(&*it);
+        for (Function *f : made) f->dropAllReferences();
+        for (Function *f : made) f->eraseFromParent();
+    }
+    return build_fn(def, fname, params, ret);
 }
 
 // ---------------------------------------------------------------------------
@@ -190,6 +221,49 @@ Value* gen_call(Node *node) {
     }
 
     std::string name = sym_name(node->call.callee->ident.sym);
+
+    auto tmpl = FnTemplates.find(name);
+    if (tmpl != FnTemplates.end()) {
+        Node *def = tmpl->second;
+        if (def->fn.param_count != node->call.arg_count) {
+            fprintf(stderr, "Compiler Error: '%s' expects %u arguments, got %u\n",
+                    name.c_str(), def->fn.param_count, node->call.arg_count);
+            return nullptr;
+        }
+
+        std::vector<Value*> args;
+        std::vector<Type*>  types;
+        std::string fname = name + "(";
+        for (uint32_t i = 0; i < node->call.arg_count; i++) {
+            Value *v = expr_gen(node->call.args[i]);
+            if (!v) return nullptr;
+            if (Node *ann = def->fn.params[i]->param.type_ann) {
+                Type *want = annotation_type(ann);
+                if (!want) return nullptr;
+                if (!(v = coerce_value(v, want))) {
+                    fprintf(stderr, "Compiler Error: Argument %u of '%s' has the wrong type\n", i + 1, name.c_str());
+                    return nullptr;
+                }
+            }
+            args.push_back(v);
+            types.push_back(v->getType());
+            std::string ts;
+            raw_string_ostream os(ts);
+            v->getType()->print(os);
+            fname += (i ? "," : "") + os.str();
+        }
+        fname += ")";
+
+        Function *fn = TheModule->getFunction(fname);
+        if (!fn && !(fn = specialize(def, fname, types))) return nullptr;
+
+        if (fn->getReturnType()->isVoidTy()) {
+            Builder->CreateCall(fn, args);
+            return ConstantInt::get(Builder->getInt32Ty(), 0);
+        }
+        return Builder->CreateCall(fn, args, "call." + name);
+    }
+
     Function   *fn   = TheModule->getFunction(name);
 
     if (!fn) {
@@ -244,20 +318,30 @@ Value* gen_call(Node *node) {
 // code that follows the return in the source (unreachable code). This keeps
 // LLVM happy — every basic block needs a valid terminator.
 Value* gen_return(Node *node) {
-    if (node->return_.value) {
-        Value *val = expr_gen(node->return_.value);
-        if (!val) return nullptr;
+    Function *cur    = Builder->GetInsertBlock()->getParent();
+    Type     *ret_ty = cur->getReturnType();
+    bool      probe  = ProbeReturns.count(cur) > 0;
+    Value    *val    = nullptr;
 
-        // Cast the return value to the function's declared return type if needed
-        Function *fn     = Builder->GetInsertBlock()->getParent();
-        Type     *ret_ty = fn->getReturnType();
-        Value    *coerced = coerce_value(val, ret_ty);
-        if (coerced) val = coerced;
+    if (node->return_.value && !(val = expr_gen(node->return_.value))) return nullptr;
 
-        Builder->CreateRet(val);
-    } else {
-        // Bare `give` with no value → void return
+    // A probe only records the first return's type; its body is thrown away
+    if (probe) {
+        if (!ProbeReturns[cur]) ProbeReturns[cur] = val ? val->getType() : Builder->getVoidTy();
+        Builder->CreateRet(Constant::getNullValue(ret_ty));
+    } else if (!val) {
+        if (!ret_ty->isVoidTy()) {
+            fprintf(stderr, "Compiler Error: Bare 'return' in a function that returns a value\n");
+            return nullptr;
+        }
         Builder->CreateRetVoid();
+    } else {
+        Value *coerced = coerce_value(val, ret_ty);
+        if (!coerced) {
+            fprintf(stderr, "Compiler Error: A function's returns must all have the same type\n");
+            return nullptr;
+        }
+        Builder->CreateRet(coerced);
     }
 
     // Create an unreachable "dead" block for any code that follows the return.

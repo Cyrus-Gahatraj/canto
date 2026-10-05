@@ -73,7 +73,7 @@ static Value* gen_write(Node *node) {
     for (uint32_t i = 0; i < node->write.count; i++) {
         Node  *arg = node->write.exprs[i];
         Value *val = expr_gen(arg);
-        if (!val) continue;
+        if (!val) return nullptr;
 
         Type *ty = val->getType();
 
@@ -468,7 +468,7 @@ static Value* gen_break(Node *node) {
 static Value* gen_block(Node *node) {
     Value *last = nullptr;
     for (uint32_t i = 0; i < node->block.count; i++)
-        last = stmt_gen(node->block.stmts[i]);
+        if (!(last = stmt_gen(node->block.stmts[i]))) return nullptr;
     return last;
 }
 

@@ -1,0 +1,53 @@
+~~
+    Functions on Any Type Test
+
+    A function takes whatever its call passes in. Each call's argument
+    types compile their own copy, and the return type comes from the
+    first `return` (or a `): type` annotation).
+~~
+
+let add(a, b) {
+    return a + b
+}
+
+let half(x) {
+    return x / 2.0
+}
+
+let is_big(n) {
+    return n > 10
+}
+
+let pick(flag, a, b) {
+    if flag { return a }
+    return b
+}
+
+let scale(x: double, k): double {
+    return x * k
+}
+
+let shout(s) {
+    write s
+}
+
+~ mutual recursion with a bool return
+let is_even(n) {
+    if n = 0 { return true }
+    return is_odd(n - 1)
+}
+
+let is_odd(n) {
+    if n = 0 { return false }
+    return is_even(n - 1)
+}
+
+write add(2, 3)
+write add(1.5, 2.25)
+write half(5)
+write is_big(42)
+write pick(true, "yes", "no")
+write pick(false, 1.5, 2.5)
+write scale(3, 2)
+shout("loud")
+write is_even(10)

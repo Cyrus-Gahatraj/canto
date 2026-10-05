@@ -327,7 +327,7 @@ static Node* parse_let_declaration(Parser* parser) {
     skip_trivia(parser);
 
     // ── function: let name(params) { body }
-    // Scan ahead: if (...) is followed by {, it's a function definition.
+    // Scan ahead: if (...) is followed by { or a `: type`, it's a function.
     // Otherwise (e.g. let a (5)) it's a regular let with parenthesized expr.
     bool is_fn = false;
     if (check(parser, TK_LPAREN)) {
@@ -342,7 +342,7 @@ static Node* parse_let_declaration(Parser* parser) {
         if (check(parser, TK_RPAREN)) {
             next(parser);
             skip_trivia(parser);
-            is_fn = check(parser, TK_LBRACE);
+            is_fn = check(parser, TK_LBRACE) || check(parser, TK_COLON);
         }
         parser->cursor = saved;
     }

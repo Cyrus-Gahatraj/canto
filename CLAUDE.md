@@ -30,7 +30,8 @@ main.rs (clap) → ffi::Engine → compile() [src/c/compiler.c]
 - **FFI:** `src/ffi/ffi.rs` declares `canto_ctx_create`, `canto_ctx_free` and `compile`. `Engine` owns the `CantoContext*`.
 - **Symbols:** each symbol ID is an index into `SymTable.syms`. **ID 0 means "none"**, and real IDs start at 1. In C++, `sym_name(id)` turns an ID back into its text.
 - **Codegen state is global.** `src/llvm/context.hpp` holds `TheContext`, `TheModule`, `Builder`, `NamedValues`, `LoopStack`, `KeywordModifiers`, `VariableElementTypes`, `IsRepl` and `WhenSubject`. `codegen_init()` resets all of them.
-- **Codegen return values:** gen functions return `nullptr` on error. `codegen_eval_expr` turns that into `-1`. A statement that produces no value returns a dummy `i32 0` constant rather than `nullptr`.
+- **Codegen return values:** gen functions return `nullptr` on error. `codegen_eval_expr` turns that into `-1`. A statement that produces no value returns a dummy `i32 0` constant rather than `nullptr`. A block stops at its first failing statement.
+- **Functions are compiled per call.** `gen_fn` only records the definition in `FnTemplates`. `gen_call` compiles one copy for each set of argument types, named like `add(i64,double)`, and annotated parameters (`x: double`) are coerced to their type. The return type comes from a `): type` annotation, or else from a throwaway "probe" compile that records the first `return`'s type (`ProbeReturns`). If the probe is part of mutual recursion, every function compiled during it is erased and rebuilt. `build_fn` saves and restores `NamedValues`, `VariableElementTypes`, `LoopStack` and `WhenSubject` around the body.
 - **Modules:** `get path` loads a Canto module. `get c:name { ... }` links C library `name` and declares its functions, and `get { ... }` or `get c: { ... }` means libc. Quotes around the path are optional. Without them `parse_get` takes the raw source text up to the first space, newline or `{` and interns it. The parser sets `get.is_canto` when the path lacks the `c:` prefix, and `gen_get` strips the prefix. Modules are resolved in `compiler.c`, not codegen. The path is relative to the importing file, and `.ct` is appended if missing. The module's statements are compiled into the same `main` at the import point. Every module shares the caller's `SymTable`, and `loaded_modules` (absolute paths, including the main file) makes each file load once. `gen_get` rejects a module `get` nested inside a block.
 - **REPL persistence:** variables live in a fixed `int64_t ReplStorage[65536]` indexed by symbol ID (`src/llvm/repl.cpp`). Doubles, bools and pointers are bitcast into those slots. Generated code calls `repl_set_type` to record each slot's type, and slot 0 (`REPL_RESULT_SLOT`) holds the last expression's value for printing.
 
@@ -75,7 +76,8 @@ The harness runs `canto build` and executes the result from `build/<stem>`. **Th
 
 ## Known limitations (as of 2026-09-29)
 
-- Functions are integer-only. `gen_fn` makes every parameter and return value `i64`, and it parses type annotations but ignores them.
+- A function is only type-checked when it's called, so errors in a function that's never called go unreported. Type annotations know `int`, `double`, `bool` and `string`.
+- String interpolation only works directly in `write`. `let s "v `x`"` or `return "v `x`"` silently drops the interpolated value.
 - `design`, `try`, `ask`, `optional` and `error` are reserved keywords with no implementation. `..` (parent access) is parsed but not generated.
 - `ArenaBlock.used` and `ArenaBlock.capacity` are `uint8_t` while blocks are 64 KiB (`include/canto/arena.h`), so almost every allocation starts a new block.
 - Nothing ever calls `free_source_map`. `init_lexer` sets up a SymTable that `compile()` immediately overwrites.

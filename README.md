@@ -134,7 +134,35 @@ let hypot2(a, b) {
 write hypot2(3, 4)    ~ 25
 ```
 
-For now, all parameters and return values are 64-bit integers.
+A function takes any type of value. Each call compiles a copy for the types it passes, and the return type comes from the first `return`:
+
+```
+let add(a, b) {
+    return a + b
+}
+
+write add(2, 3)         ~ 5
+write add(1.5, 2.25)    ~ 3.750000
+
+let pick(flag, a, b) {
+    if flag { return a }
+    return b
+}
+
+write pick(true, "yes", "no")   ~ yes
+```
+
+You can annotate parameters and the return type to fix them. Arguments are then converted to that type:
+
+```
+let scale(x: double, k): double {
+    return x * k
+}
+
+write scale(3, 2)       ~ 6.000000
+```
+
+All the `return`s in one function must have the same type.
 
 ### Arrays and custom types
 
