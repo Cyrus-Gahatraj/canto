@@ -152,10 +152,10 @@ struct Node {
             Node*     return_type;
         } fn;
 
-		// get "lib" { name(params): ret }  /  get "file" (no block → module)
+		// get "c:lib" { name(params): ret }  /  get "file" (Canto module)
 		// decls are NODE_FN with body = NULL
 		struct {
-			uint32_t lib_sym;    // library, or module path when is_canto; 0 = none (libc)
+			uint32_t lib_sym;    // "c:lib", or module path when is_canto; 0 = none (libc)
 			bool     is_canto;
 			Node**   decls;
 			uint32_t decl_count;

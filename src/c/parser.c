@@ -790,27 +790,32 @@ static Node* parse_dot_dot_infix(Parser* parser, Node* left) {
     return node;
 }
 
-// get "lib/mathx"                       → Canto module (no block)
-// get "m" { sqrt(x: double): double }    → C library + its functions
-// A block means C: the string names the library to link (none = libc).
-// Without a block the string is a .ct file, relative to this one, that
-// compile() loads in place. `get "m" {}` links a library alone.
+// get "lib/mathx"                         → Canto module
+// get "c:m" { sqrt(x: double): double }    → C library + its functions
+// A "c:" prefix names a C library to link ("c:" alone or no string = libc)
+// and the optional block declares its functions. Any other string is a
+// .ct file, relative to this one, that compile() loads in place.
 static Node* parse_get(Parser* parser) {
 	Span start = current(parser)->span;
 	next(parser);	// consume 'get'
 	while (check(parser, TK_WHITESPACE)) next(parser);
 
 	uint32_t lib_sym = 0;
+	bool is_canto = false;
 	if (check(parser, TK_STRING_LIT)) {
 		lib_sym = next(parser).sym;
+		const Symbol *s = &parser->symbols->syms[lib_sym];
+		is_canto = !(s->length >= 2 && memcmp(s->start, "c:", 2) == 0);
 		while (check(parser, TK_WHITESPACE)) next(parser);
 	}
+	// reported after the block is parsed, so it doesn't cascade
+	bool bad_block = is_canto && check(parser, TK_LBRACE);
+	Span block_span = current(parser)->span;
 
 	Node **decls = NULL;
 	uint32_t count = 0, cap = 0;
 
-	bool has_block = match(parser, TK_LBRACE);
-	if (has_block) {
+	if (match(parser, TK_LBRACE)) {
 		skip_trivia(parser);
 		while (!check(parser, TK_RBRACE) && !check(parser, TK_LEX_EOF) && !parser->had_error) {
 			Span decl_start = current(parser)->span;
@@ -861,9 +866,14 @@ static Node* parse_get(Parser* parser) {
 		expect_token(parser, TK_RBRACE, "expected '}' to close 'get' block");
 	}
 
+	if (bad_block) {
+		append_diag(parser->diags, "a Canto module takes no '{ }' block; use \"c:name\" for a C library", block_span, DIAG_PHASE_PARSE, DIAG_ERROR);
+		parser->had_error = true;
+	}
+
 	Node *node = make_node(parser, NODE_GET, start);
 	node->get.lib_sym    = lib_sym;
-	node->get.is_canto   = lib_sym && !has_block;
+	node->get.is_canto   = is_canto;
 	node->get.decls      = decls;
 	node->get.decl_count = count;
 	return node;
