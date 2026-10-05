@@ -14,7 +14,7 @@ cargo run                        # REPL
 cargo run -- init dir            # new project from templates/init/
 ```
 
-`install.sh` (Linux/macOS) and `install.ps1` (Windows, via WSL) install the dependencies and run `cargo install --git`. `build.rs` bakes `llvm-config --bindir`/clang into the binary as `CANTO_CLANG` when that file exists, and `main.rs` links with it, falling back to `clang` on `PATH`.
+`install.sh` (Linux/macOS) and `install.ps1` (Windows, via WSL) install the dependencies and run `cargo install --git`. `canto update` re-runs `install.sh` through `sh -c "curl … | sh"`. `build.rs` bakes `llvm-config --bindir`/clang into the binary as `CANTO_CLANG` when that file exists, and `main.rs` links with it, falling back to `clang` on `PATH`.
 
 The linker prints `ld: warning: directory not found ... libiconv` under Nix on macOS. The warning is harmless.
 

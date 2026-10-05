@@ -254,7 +254,7 @@ irm https://raw.githubusercontent.com/Cyrus-Gahatraj/canto/main/install.ps1 | ie
 
 Canto runs inside WSL on Windows. The script sets up WSL if needed, installs Canto there, and adds a `canto` command to Windows that forwards to it. Use `/` in file paths.
 
-Set `CANTO_BRANCH` to install a branch other than `main`.
+Set `CANTO_BRANCH` to install a branch other than `main`. Run `canto update` later to rebuild from the latest source.
 
 ## Building from source
 
