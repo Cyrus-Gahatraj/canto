@@ -152,7 +152,7 @@ struct Node {
             Node*     return_type;
         } fn;
 
-		// get "c:lib" { name(params): ret }  /  get "file" (Canto module)
+		// get c:lib { name(params): ret }  /  get file (Canto module)
 		// decls are NODE_FN with body = NULL
 		struct {
 			uint32_t lib_sym;    // "c:lib", or module path when is_canto; 0 = none (libc)

@@ -790,9 +790,10 @@ static Node* parse_dot_dot_infix(Parser* parser, Node* left) {
     return node;
 }
 
-// get "lib/mathx"                         → Canto module
-// get "c:m" { sqrt(x: double): double }    → C library + its functions
-// A "c:" prefix names a C library to link ("c:" alone or no string = libc)
+// get lib/mathx                         → Canto module
+// get c:m { sqrt(x: double): double }    → C library + its functions
+// The path may also be quoted ("my dir/x") when it has spaces.
+// A "c:" prefix names a C library to link ("c:" alone or no path = libc)
 // and the optional block declares its functions. Any other string is a
 // .ct file, relative to this one, that compile() loads in place.
 static Node* parse_get(Parser* parser) {
@@ -804,6 +805,22 @@ static Node* parse_get(Parser* parser) {
 	bool is_canto = false;
 	if (check(parser, TK_STRING_LIT)) {
 		lib_sym = next(parser).sym;
+	} else {
+		// unquoted path: the raw source text up to a space, newline or '{'
+		uint32_t from = current(parser)->span.start, to = from;
+		while (!check(parser, TK_WHITESPACE) && !check(parser, TK_NEWLINE) &&
+		       !check(parser, TK_LINE_COMMENT) && !check(parser, TK_BLOCK_COMMENT) &&
+		       !check(parser, TK_LBRACE) && !check(parser, TK_SEMICOLON) &&
+		       !check(parser, TK_LEX_EOF)) {
+			Span sp = next(parser).span;
+			to = sp.start + sp.length;
+		}
+		if (to > from) {
+			Symbol path = { .start = parser->map->source_buffer + from, .length = to - from };
+			lib_sym = intern_symbol(parser->symbols, &path);
+		}
+	}
+	if (lib_sym) {
 		const Symbol *s = &parser->symbols->syms[lib_sym];
 		is_canto = !(s->length >= 2 && memcmp(s->start, "c:", 2) == 0);
 		while (check(parser, TK_WHITESPACE)) next(parser);
@@ -867,7 +884,7 @@ static Node* parse_get(Parser* parser) {
 	}
 
 	if (bad_block) {
-		append_diag(parser->diags, "a Canto module takes no '{ }' block; use \"c:name\" for a C library", block_span, DIAG_PHASE_PARSE, DIAG_ERROR);
+		append_diag(parser->diags, "a Canto module takes no '{ }' block; use c:name for a C library", block_span, DIAG_PHASE_PARSE, DIAG_ERROR);
 		parser->had_error = true;
 	}
 

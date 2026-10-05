@@ -117,11 +117,11 @@ static Type* c_type(Node *ann) {
     return nullptr;
 }
 
-// Compiles:  get "c:m" { sqrt(x: double): double }
+// Compiles:  get c:m { sqrt(x: double): double }
 Value* gen_get(Node *node) {
     // compile() loads top-level modules; anything reaching here is nested
     if (node->get.is_canto) {
-        fprintf(stderr, "Compiler Error: 'get \"module\"' is only allowed at the top level\n");
+        fprintf(stderr, "Compiler Error: 'get module' is only allowed at the top level\n");
         return nullptr;
     }
     std::string lib = node->get.lib_sym ? sym_name(node->get.lib_sym).substr(2) : "";  // drop "c:"

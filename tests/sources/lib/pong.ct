@@ -1,2 +1,2 @@
-get "ping"
+get ping
 write "pong"

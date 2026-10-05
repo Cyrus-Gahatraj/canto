@@ -1,12 +1,12 @@
 ~~
     C Library Import Test
 
-    `get "c:lib"` declares C functions by signature and links their library.
-    With no string (or "c:" alone) the functions come from libc.
+    `get c:lib` declares C functions by signature and links their library.
+    With no name (or `c:` alone) the functions come from libc.
     C types: int, long, char, float, double, string, ptr, void.
 ~~
 
-get "c:m" {
+get c:m {
     sqrt(x: double): double
     pow(base: double, exp: double): double
 }

@@ -160,18 +160,18 @@ By convention, a keyword variant has a PascalCase name so it stands out from ord
 
 ### Modules and C libraries: `get`
 
-`get` with a path pulls in another Canto file. The path is relative to the importing file, and `.ct` is optional. The file's top-level code runs at the point of the `get`, and its functions and variables are visible after it. A file only loads once, so repeated or circular imports are safe.
+`get` with a path pulls in another Canto file. The path needs no quotes (add them if it has spaces) and is relative to the importing file, and `.ct` is optional. The file's top-level code runs at the point of the `get`, and its functions and variables are visible after it. A file only loads once, so repeated or circular imports are safe.
 
 ```
-get "lib/mathx"        ~ loads lib/mathx.ct
+get lib/mathx          ~ loads lib/mathx.ct
 
 write square(7)
 ```
 
-A `c:` prefix means a C library instead. The block declares the functions to use from it. Leave out the string to use the C standard library. The C types are `int`, `long`, `char`, `float`, `double`, `string`, `ptr` and `void`.
+A `c:` prefix means a C library instead. The block declares the functions to use from it. Leave out the name to use the C standard library. The C types are `int`, `long`, `char`, `float`, `double`, `string`, `ptr` and `void`.
 
 ```
-get "c:m" {            ~ links libm
+get c:m {              ~ links libm
     sqrt(x: double): double
 }
 

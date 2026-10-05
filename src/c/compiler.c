@@ -33,7 +33,7 @@ static bool is_expr_node(NodeKind kind) {
     }
 }
 
-// Absolute paths of modules loaded by `get "file"` during this compile.
+// Absolute paths of modules loaded by `get file` during this compile.
 // Each module is evaluated once, which also stops import cycles.
 static char**   loaded_modules;
 static uint32_t loaded_count;
@@ -53,7 +53,7 @@ static char* read_file(const char* path) {
     return buf;
 }
 
-// get "utils" → compiles <importer's dir>/utils.ct in place
+// get utils → compiles <importer's dir>/utils.ct in place
 static bool load_module(Node* get, const char* importer, SymTable* syms) {
     const Symbol* s = &syms->syms[get->get.lib_sym];
     int dir_len = 0;
