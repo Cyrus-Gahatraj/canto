@@ -51,3 +51,8 @@ fn when_test() {
 fn get_test() {
     CantoTest::new("get.ct").assert_output("4.000000\n1024.000000\n43\n5\nhello from libc");
 }
+
+#[test]
+fn modules_test() {
+    CantoTest::new("modules.ct").assert_output("1764\n4.000000");
+}

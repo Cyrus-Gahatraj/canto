@@ -19,7 +19,7 @@ $ canto run sonnet.ct
 Thou art more lovely than a summer day
 ```
 
-> **Status:** early and experimental (v0.1.0). The syntax is still changing, and several reserved keywords (`design`, `try`, `ask`, `get`, `optional`, `error`) are not implemented yet.
+> **Status:** early and experimental (v0.1.0). The syntax is still changing, and several reserved keywords (`design`, `try`, `ask`, `optional`, `error`) are not implemented yet.
 
 ## A tour of the language
 
@@ -157,6 +157,32 @@ write "world"                        ~ → hello world
 ```
 
 By convention, a keyword variant has a PascalCase name so it stands out from ordinary variables.
+
+### Modules and C libraries: `get`
+
+`get canto` pulls in another Canto file. The path is relative to the importing file, and `.ct` is optional. The file's top-level code runs at the point of the `get`, and its functions and variables are visible after it. A file only loads once, so repeated or circular imports are safe.
+
+```
+get canto "lib/mathx"        ~ loads lib/mathx.ct
+
+write square(7)
+```
+
+`get clib` declares C functions and links the library they come from. Leave out the string to use the C standard library. The C types are `int`, `long`, `char`, `float`, `double`, `string`, `ptr` and `void`.
+
+```
+get clib "m" {
+    sqrt(x: double): double
+}
+
+get clib {
+    puts(s: string): int
+}
+
+write sqrt(16.0)
+```
+
+A bare `get "m" { ... }` means the same as `get clib`. Modules share one namespace, so a name defined in two files clashes.
 
 ## Using the CLI
 

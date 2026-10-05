@@ -1,0 +1,18 @@
+~~
+    Module System Test
+
+    `get canto "path"` compiles another .ct file in place. The path is
+    relative to the importing file and `.ct` is optional. A module is
+    loaded once, however many times it is imported.
+    `get clib "lib" { ... }` declares C functions, as plain `get` does.
+~~
+
+get canto "lib/mathx"
+get canto "lib/consts.ct"
+
+get clib "m" {
+    sqrt(x: double): double
+}
+
+write square(answer)
+write sqrt(16.0)

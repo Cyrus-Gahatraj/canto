@@ -1,0 +1,6 @@
+~ Module for modules.ct. Paths in `get canto` are relative to this file.
+get canto "consts"
+
+let square(x) {
+    return x * x
+}
