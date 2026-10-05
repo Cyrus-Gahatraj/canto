@@ -21,7 +21,7 @@ The linker prints `ld: warning: directory not found ... libiconv` under Nix on m
 main.rs (clap) → ffi::Engine → compile() [src/c/compiler.c]
   → lexer.c        tokens + interned symbols (SymTable)
   → parser.c       Pratt parser → arena-allocated AST (Node)
-  → eval_stmts:     `get canto "f"` → load_module: lex/parse f.ct, recurse (compiler.c)
+  → eval_stmts:     `get "f"` → load_module: lex/parse f.ct, recurse (compiler.c)
   → codegen (C++)  stmt_gen / expr_gen / var_gen / fn_gen → one LLVM Module with `main`
   → file mode:     codegen_dump → build/.tmp/<stem>.ll → clang (in main.rs) → build/<stem>
   → REPL mode:     jit_run (ORC LLJIT), then codegen_init() for the next line
@@ -31,7 +31,7 @@ main.rs (clap) → ffi::Engine → compile() [src/c/compiler.c]
 - **Symbols:** each symbol ID is an index into `SymTable.syms`. **ID 0 means "none"**, and real IDs start at 1. In C++, `sym_name(id)` turns an ID back into its text.
 - **Codegen state is global.** `src/llvm/context.hpp` holds `TheContext`, `TheModule`, `Builder`, `NamedValues`, `LoopStack`, `KeywordModifiers`, `VariableElementTypes`, `IsRepl` and `WhenSubject`. `codegen_init()` resets all of them.
 - **Codegen return values:** gen functions return `nullptr` on error. `codegen_eval_expr` turns that into `-1`. A statement that produces no value returns a dummy `i32 0` constant rather than `nullptr`.
-- **Modules:** `get canto "path"` is resolved in `compiler.c`, not codegen. The path is relative to the importing file, and `.ct` is appended if missing. The module's statements are compiled into the same `main` at the import point. Every module shares the caller's `SymTable`, and `loaded_modules` (absolute paths, including the main file) makes each file load once. `gen_get` rejects a `get canto` nested inside a block. In `get`, `clib` and `canto` are plain identifiers, not keywords, and leaving the word out means `clib`.
+- **Modules:** `get "path"` without a `{ }` block loads a Canto module, and with a block it declares C functions (`get "m" {}` links a library alone). The parser sets `get.is_canto` from that. Modules are resolved in `compiler.c`, not codegen. The path is relative to the importing file, and `.ct` is appended if missing. The module's statements are compiled into the same `main` at the import point. Every module shares the caller's `SymTable`, and `loaded_modules` (absolute paths, including the main file) makes each file load once. `gen_get` rejects a module `get` nested inside a block.
 - **REPL persistence:** variables live in a fixed `int64_t ReplStorage[65536]` indexed by symbol ID (`src/llvm/repl.cpp`). Doubles, bools and pointers are bitcast into those slots. Generated code calls `repl_set_type` to record each slot's type, and slot 0 (`REPL_RESULT_SLOT`) holds the last expression's value for printing.
 
 ## Where things live
@@ -83,7 +83,7 @@ The harness runs `canto build` and executes the result from `build/<stem>`. **Th
 - The REPL prints string variables as `""`.
 - `get` can't declare variadic C functions (`printf`), and in the REPL its declarations last only for that line.
 - Modules have no namespaces or exports. Every top-level name is shared, and a module's source, tokens and AST are never freed.
-- The REPL forgets functions after each line, including functions from a `get canto` module.
+- The REPL forgets functions after each line, including functions from an imported module.
 - `main.rs` ignores a failed `compile()`, so `canto run` still calls clang and prints a "no such file" error after the real one.
 
 ## Conventions
