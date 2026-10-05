@@ -56,3 +56,18 @@ fn get_test() {
 fn modules_test() {
     CantoTest::new("modules.ct").assert_output("1764\n4.000000");
 }
+
+#[test]
+fn module_cycle_test() {
+    CantoTest::new("module_cycle.ct").assert_output("pong\nping\ndone");
+}
+
+#[test]
+fn module_missing_test() {
+    CantoTest::new("module_missing.ct").assert_compile_error("cannot find module");
+}
+
+#[test]
+fn module_block_test() {
+    CantoTest::new("module_block.ct").assert_compile_error("a Canto module takes no '{ }' block");
+}

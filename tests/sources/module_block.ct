@@ -1,0 +1,4 @@
+~ A Canto module takes no block; C libraries need the "c:" prefix.
+get "m" {
+    sqrt(x: double): double
+}

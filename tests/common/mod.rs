@@ -72,4 +72,15 @@ impl CantoTest {
             self.file_path
         );
     }
+
+    pub fn assert_compile_error(&self, expected_message: &str) {
+        let (compile_success, stderr) = self.compile();
+
+        assert!(!compile_success, "Expected {} to fail to compile", self.file_path);
+        assert!(
+            stderr.contains(expected_message),
+            "\nExpected diagnostic containing {:?} for file: {}\nGot:\n{}",
+            expected_message, self.file_path, stderr
+        );
+    }
 }
