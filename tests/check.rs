@@ -43,8 +43,8 @@ fn arrays_test() {
 
 #[test]
 fn when_test() {
-    // Tests integer equality, predicate (dot) arms, and string equality
-    CantoTest::new("when.ct").assert_output("two\nC\nformal");
+    // Tests integer equality, predicate arms (with and without '.'), and string equality
+    CantoTest::new("when.ct").assert_output("two\nC\nformal\nB");
 }
 
 #[test]

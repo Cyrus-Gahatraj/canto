@@ -58,7 +58,7 @@ main.rs (clap) → ffi::Engine → compile() [src/c/compiler.c]
 - **`or` has two meanings.** After an `if` block it means else-if; inside a condition it's boolean OR.
 - **`if cond | loop { }`** is a while loop, stored as `NODE_IF` with `is_loop = true`.
 - **`loop expr { }`** always treats `expr` as a repeat count and never as a condition. `loop { }` loops forever.
-- **In `when`, `.` means the subject.** A predicate arm evaluates with `WhenSubject` set to the value being matched. Arms never fall through, and the `;` after an arm has no effect.
+- **In `when`, `.` means the subject.** A predicate arm evaluates with `WhenSubject` set to the value being matched. An arm that starts with a comparison operator (`> 90:`) gets a bare `.` inserted as its left side, but only one comparison: `> 60 and < 90` doesn't parse. Arms never fall through, and the `;` after an arm has no effect.
 - **String interpolation happens in the lexer.** It splits `"a `x` b"` into several tokens, and only an identifier or a number is allowed between the backticks.
 
 ## Tests
@@ -72,7 +72,7 @@ fn foo_test() {
 }
 ```
 
-The harness runs `canto build` and executes the result from `build/<stem>`. **The assertion in `check.rs` is the source of truth.** The "Expected Terminal Output" comments inside the `.ct` files have drifted in `when.ct` and `loops.ct`.
+The harness runs `canto build` and executes the result from `build/<stem>`. **The assertion in `check.rs` is the source of truth.** The "Expected Terminal Output" comments inside the `.ct` files have drifted in `loops.ct`.
 
 ## Known limitations (as of 2026-09-29)
 

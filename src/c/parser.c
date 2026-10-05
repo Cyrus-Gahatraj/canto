@@ -611,6 +611,17 @@ static Node* parse_when_stmt(Parser* parser) {
             if (!arm->when_arm.pattern) break;
         }
 
+        // Bare comparison arm: '> 90' is short for '. > 90'
+        if (!arm->when_arm.is_else && !arm->when_arm.is_predicate &&
+            (check(parser, TK_GT) || check(parser, TK_LT) || check(parser, TK_GEQ) ||
+             check(parser, TK_LEQ) || check(parser, TK_EQUAL) || check(parser, TK_NOT_EQUAL))) {
+            Node *dot = make_node(parser, NODE_DOT, current(parser)->span);
+            dot->dot.left      = NULL;
+            dot->dot.field_sym = 0;
+            arm->when_arm.is_predicate = true;
+            arm->when_arm.pattern = parse_binary(parser, dot);
+        }
+
         // Ordinary equality pattern: integer, float, string literal, or variable
         if (!arm->when_arm.is_else && !arm->when_arm.is_predicate) {
             arm->when_arm.pattern = parse_expression(parser);

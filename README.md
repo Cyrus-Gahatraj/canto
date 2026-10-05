@@ -101,13 +101,13 @@ if machine_on | loop {     ~ while machine_on is true
 
 ### Pattern matching: `when`
 
-An arm matches either a value (numbers or strings) or a predicate, where `.` is the value being matched. `_` is the default arm. The first arm that matches runs.
+An arm matches either a value (numbers or strings) or a predicate, where `.` is the value being matched. An arm that starts with a comparison like `> 90` can leave out the `.`. `_` is the default arm. The first arm that matches runs.
 
 ```
 when score {
-    . > 90: { write "A" }
-    . > 75: { write "B" }
-    . > 60: { write "C" }
+    > 90:   { write "A" }
+    > 75:   { write "B" }
+    . > 60 and . < 70: { write "C" }
     _:      { write "F" }
 }
 

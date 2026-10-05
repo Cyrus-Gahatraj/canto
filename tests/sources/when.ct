@@ -5,6 +5,7 @@
       1. Integer equality:  1: { ... }          matches subject == 1
       2. Predicate:         . > 4: { ... }       matches subject satisfies condition
                             (dot '.' is the subject itself)
+                            > 4: { ... }         the same, with the '.' left out
       3. String equality:   "hello": { ... }     uses strcmp under the hood
 
     Separators: semicolons between arms act as explicit breaks (no fall-through).
@@ -47,7 +48,20 @@ when greeting {
     _:       { write "unknown" }
 }
 
+~ -------------------------------------------------------------------
+~ Test 4: Bare comparison arms — '> 90' means '. > 90'
+~ -------------------------------------------------------------------
+let grade 82
+
+when grade {
+    >= 90: { write "A" }
+    >80:   { write "B" }
+    != 0:  { write "C" }
+    _:     { write "F" }
+}
+
 ~ Expected output (one line per test):
 ~ two
-~ F
+~ C
 ~ formal
+~ B
