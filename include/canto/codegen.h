@@ -12,6 +12,7 @@ extern "C" {
 	void codegen_free(void);
 
 	void codegen_dump(const char* output_path);
+	const char* codegen_link_libs(void);
 	void codegen_set_symtable(SymTable *table);
 	void codegen_finalize(int ret);
 	void codegen_finalize_repl(void);

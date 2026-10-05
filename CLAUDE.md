@@ -74,11 +74,12 @@ The harness runs `canto build` and executes the result from `build/<stem>`. **Th
 ## Known limitations (as of 2026-09-29)
 
 - Functions are integer-only. `gen_fn` makes every parameter and return value `i64`, and it parses type annotations but ignores them.
-- `design`, `try`, `ask`, `get`, `optional` and `error` are reserved keywords with no implementation. `..` (parent access) is parsed but not generated.
+- `design`, `try`, `ask`, `optional` and `error` are reserved keywords with no implementation. `..` (parent access) is parsed but not generated.
 - `ArenaBlock.used` and `ArenaBlock.capacity` are `uint8_t` while blocks are 64 KiB (`include/canto/arena.h`), so almost every allocation starts a new block.
 - Nothing ever calls `free_source_map`. `init_lexer` sets up a SymTable that `compile()` immediately overwrites.
 - `loop t { }` with a bool `t` runs zero times without any error.
 - The REPL prints string variables as `""`.
+- `get` can't declare variadic C functions (`printf`), and in the REPL its declarations last only for that line.
 
 ## Conventions
 

@@ -15,7 +15,16 @@
 #include "context.hpp"
 #include "helpers.hpp"
 
+#include <llvm/Support/DynamicLibrary.h>
+
 using namespace llvm;
+
+// Libraries named by `get`, as clang flags ("-lm -lfoo"). Read by main.rs.
+std::string LinkLibs;
+
+extern "C" const char* codegen_link_libs(void) {
+    return LinkLibs.c_str();
+}
 
 // ---------------------------------------------------------------------------
 // NODE_FN — function definition
@@ -89,6 +98,78 @@ Value* gen_fn(Node *node) {
 }
 
 // ---------------------------------------------------------------------------
+// NODE_GET — declare C functions and link their library
+// ---------------------------------------------------------------------------
+
+// C type names use C sizes (int is 32 bits), unlike Canto's own `int`.
+static Type* c_type(Node *ann) {
+    if (!ann) return Type::getVoidTy(*TheContext);
+    std::string n = sym_name(ann->ident.sym);
+    if (n == "int")                    return Type::getInt32Ty(*TheContext);
+    if (n == "long")                   return Type::getInt64Ty(*TheContext);
+    if (n == "char")                   return Type::getInt8Ty(*TheContext);
+    if (n == "float")                  return Type::getFloatTy(*TheContext);
+    if (n == "double")                 return Type::getDoubleTy(*TheContext);
+    if (n == "string" || n == "ptr")   return PointerType::get(*TheContext, 0);
+    if (n == "void")                   return Type::getVoidTy(*TheContext);
+    fprintf(stderr, "Compiler Error: Unknown C type '%s' "
+                    "(use int, long, char, float, double, string, ptr or void)\n", n.c_str());
+    return nullptr;
+}
+
+// Compiles:  get "m" { sqrt(x: double): double }
+Value* gen_get(Node *node) {
+    if (node->get.lib_sym) {
+        std::string lib = sym_name(node->get.lib_sym);
+        bool is_path = lib.find('/') != std::string::npos;
+
+        if (IsRepl) {
+            // ponytail: dlopen failure is ignored; the JIT reports the missing symbol on call
+            std::string file = is_path ? lib : "lib" + lib +
+#ifdef __APPLE__
+                ".dylib";
+#else
+                ".so";
+#endif
+            sys::DynamicLibrary::LoadLibraryPermanently(file.c_str());
+        } else {
+            std::string flag = is_path ? lib : "-l" + lib;
+            if ((" " + LinkLibs + " ").find(" " + flag + " ") == std::string::npos)
+                LinkLibs += (LinkLibs.empty() ? "" : " ") + flag;
+        }
+    }
+
+    for (uint32_t i = 0; i < node->get.decl_count; i++) {
+        Node *decl = node->get.decls[i];
+        std::string name = sym_name(decl->fn.name_sym);
+
+        std::vector<Type*> params;
+        for (uint32_t p = 0; p < decl->fn.param_count; p++) {
+            Type *t = c_type(decl->fn.params[p]->param.type_ann);
+            if (!t) return nullptr;
+            if (t->isVoidTy()) {
+                fprintf(stderr, "Compiler Error: Parameter %u of '%s' needs a type\n", p + 1, name.c_str());
+                return nullptr;
+            }
+            params.push_back(t);
+        }
+        Type *ret = c_type(decl->fn.return_type);
+        if (!ret) return nullptr;
+
+        FunctionType *ty = FunctionType::get(ret, params, /*isVarArg=*/false);
+        Function *existing = TheModule->getFunction(name);
+        if (existing && existing->getFunctionType() != ty) {
+            fprintf(stderr, "Compiler Error: '%s' is already declared with a different signature\n", name.c_str());
+            return nullptr;
+        }
+        if (!existing)
+            Function::Create(ty, Function::ExternalLinkage, name, TheModule.get());
+    }
+
+    return ConstantInt::get(Builder->getInt32Ty(), 0);
+}
+
+// ---------------------------------------------------------------------------
 // NODE_CALL — function call
 // ---------------------------------------------------------------------------
 
@@ -123,11 +204,29 @@ Value* gen_call(Node *node) {
     for (uint32_t i = 0; i < node->call.arg_count; i++) {
         Value *v = expr_gen(node->call.args[i]);
         if (!v) return nullptr;
-        args.push_back(v);
+        Type *want = fn->getArg(i)->getType();
+        Value *c = coerce_value(v, want);
+        if (!c) {
+            fprintf(stderr, "Compiler Error: Argument %u of '%s' has the wrong type\n", i + 1, name.c_str());
+            return nullptr;
+        }
+        args.push_back(c);
     }
 
     // Emit the call instruction; result is the function's return value
-    return Builder->CreateCall(fn, args, "call." + name);
+    Type *ret = fn->getReturnType();
+    if (ret->isVoidTy()) {
+        Builder->CreateCall(fn, args);
+        return ConstantInt::get(Builder->getInt32Ty(), 0);
+    }
+    Value *result = Builder->CreateCall(fn, args, "call." + name);
+
+    // Widen C results (int, char, float) to the types Canto computes with
+    if (ret->isIntegerTy() && !ret->isIntegerTy(64))
+        return coerce_value(result, Builder->getInt64Ty());
+    if (ret->isFloatTy())
+        return coerce_value(result, Builder->getDoubleTy());
+    return result;
 }
 
 // ---------------------------------------------------------------------------

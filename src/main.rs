@@ -99,6 +99,7 @@ fn build_executable(path: String, execute: bool) -> Result<(), Box<dyn Error>> {
         .arg("-Wno-override-module") // Quiets target triple overrides warning
         .arg("-o")
         .arg(&bin_out)
+        .args(engine.link_libs())
         .status();
 
     match status {

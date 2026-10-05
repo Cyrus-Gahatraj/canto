@@ -152,6 +152,14 @@ struct Node {
             Node*     return_type;
         } fn;
 
+		// get "lib" { name(params): ret }
+		// decls are NODE_FN with body = NULL
+		struct {
+			uint32_t lib_sym;    // 0 = no library to link (libc)
+			Node**   decls;
+			uint32_t decl_count;
+		} get;
+
 		struct {
             uint32_t  name_sym;
             uint32_t  parent_sym;  // 0 = no parent 

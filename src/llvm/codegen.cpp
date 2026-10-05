@@ -42,6 +42,7 @@ extern "C" void codegen_init(void) {
     VariableElementTypes.clear();
     LastExprResult  = nullptr;
     TheReplGlobals  = nullptr;
+    LinkLibs.clear();
 
     // Create fresh LLVM objects
     TheContext = std::make_unique<LLVMContext>();

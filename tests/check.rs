@@ -46,3 +46,8 @@ fn when_test() {
     // Tests integer equality, predicate (dot) arms, and string equality
     CantoTest::new("when.ct").assert_output("two\nC\nformal");
 }
+
+#[test]
+fn get_test() {
+    CantoTest::new("get.ct").assert_output("4.000000\n1024.000000\n43\n5\nhello from libc");
+}

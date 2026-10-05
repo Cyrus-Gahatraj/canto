@@ -790,6 +790,81 @@ static Node* parse_dot_dot_infix(Parser* parser, Node* left) {
     return node;
 }
 
+// get "m" { sqrt(x: double): double }
+// The string names the library to link and the block declares the C
+// functions to use from it. Both parts are optional.
+static Node* parse_get(Parser* parser) {
+	Span start = current(parser)->span;
+	next(parser);	// consume 'get'
+	while (check(parser, TK_WHITESPACE)) next(parser);
+
+	uint32_t lib_sym = 0;
+	if (check(parser, TK_STRING_LIT)) {
+		lib_sym = next(parser).sym;
+		while (check(parser, TK_WHITESPACE)) next(parser);
+	}
+
+	Node **decls = NULL;
+	uint32_t count = 0, cap = 0;
+
+	if (match(parser, TK_LBRACE)) {
+		skip_trivia(parser);
+		while (!check(parser, TK_RBRACE) && !check(parser, TK_LEX_EOF) && !parser->had_error) {
+			Span decl_start = current(parser)->span;
+			Token name = expect_token(parser, TK_IDENT, "expected C function name in 'get' block");
+			expect_token(parser, TK_LPAREN, "expected '(' after C function name");
+			skip_trivia(parser);
+
+			Node **params = NULL;
+			uint32_t pcount = 0, pcap = 0;
+			while (!check(parser, TK_RPAREN) && !check(parser, TK_LEX_EOF) && !parser->had_error) {
+				Node *p = parse_param(parser);
+				if (pcount >= pcap) {
+					pcap   = pcap ? pcap * 2 : 4;
+					params = realloc(params, pcap * sizeof(Node*));
+				}
+				params[pcount++] = p;
+				skip_trivia(parser);
+				if (!match(parser, TK_COMMA)) break;
+				skip_trivia(parser);
+			}
+			expect_token(parser, TK_RPAREN, "expected ')' after parameters");
+
+			// return type; none means void
+			Node *ret = NULL;
+			while (check(parser, TK_WHITESPACE)) next(parser);
+			if (match(parser, TK_COLON)) {
+				Token rt = expect_token(parser, TK_IDENT, "expected return type after ':'");
+				ret = make_node(parser, NODE_IDENT, rt.span);
+				ret->ident.sym = rt.sym;
+			}
+
+			Node *fn = make_node(parser, NODE_FN, decl_start);
+			fn->fn.name_sym    = name.sym;
+			fn->fn.params      = params;
+			fn->fn.param_count = pcount;
+			fn->fn.body        = NULL;
+			fn->fn.return_type = ret;
+
+			if (count >= cap) {
+				cap   = cap ? cap * 2 : 4;
+				decls = realloc(decls, cap * sizeof(Node*));
+			}
+			decls[count++] = fn;
+
+			skip_trivia(parser);
+			while (match(parser, TK_COMMA) || match(parser, TK_SEMICOLON)) skip_trivia(parser);
+		}
+		expect_token(parser, TK_RBRACE, "expected '}' to close 'get' block");
+	}
+
+	Node *node = make_node(parser, NODE_GET, start);
+	node->get.lib_sym    = lib_sym;
+	node->get.decls      = decls;
+	node->get.decl_count = count;
+	return node;
+}
+
 static Node* parse_continue(Parser* parser) {
 	Span start = current(parser)->span;
 	next(parser);
@@ -836,6 +911,7 @@ static Node* parse_stmt(Parser* parser) {
 		case TK_KW_CONTINUE: return parse_continue(parser);
 		case TK_KW_BREAK: return parse_break(parser);
 		case TK_KW_RETURN: return parse_return(parser);
+		case TK_KW_GET: return parse_get(parser);
         case TK_LEX_EOF: return NULL;
         default: {
             if (check(parser, TK_IDENT)) {

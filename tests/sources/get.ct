@@ -1,0 +1,23 @@
+~~
+    C Library Import Test
+
+    `get` declares C functions by signature and links their library.
+    C types: int, long, char, float, double, string, ptr, void.
+~~
+
+get "m" {
+    sqrt(x: double): double
+    pow(base: double, exp: double): double
+}
+
+get {
+    abs(n: int): int
+    strlen(s: string): long
+    puts(s: string): int
+}
+
+write sqrt(16.0)
+write pow(2, 10)
+write abs(0 - 42) + 1
+write strlen("canto")
+puts("hello from libc")

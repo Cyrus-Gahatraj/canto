@@ -15,5 +15,6 @@ unsafe extern "C" {
         file_path: *const c_char,
         output_path: *const c_char,
     ) -> bool;
+    pub fn codegen_link_libs() -> *const c_char;
 }
 
