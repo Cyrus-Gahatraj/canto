@@ -168,6 +168,26 @@ canto                         # start the interactive REPL (type `exit` to quit)
 
 Source files use the `.ct` extension. `build` and `run` generate LLVM IR, link it with `clang -O2`, and write the executable to `./build/`. The REPL instead compiles each line in memory with LLVM's ORC JIT, and your variables persist from one line to the next.
 
+## Install
+
+**Linux and macOS:**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Cyrus-Gahatraj/canto/main/install.sh | sh
+```
+
+It installs LLVM 18, clang and gperf (apt, dnf or Homebrew) and Rust if missing, then builds `canto` into `~/.cargo/bin`.
+
+**Windows** (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/Cyrus-Gahatraj/canto/main/install.ps1 | iex
+```
+
+Canto runs inside WSL on Windows. The script sets up WSL if needed, installs Canto there, and adds a `canto` command to Windows that forwards to it. Use `/` in file paths.
+
+Set `CANTO_BRANCH` to install a branch other than `main`.
+
 ## Building from source
 
 You need:

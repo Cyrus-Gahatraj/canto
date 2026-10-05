@@ -85,6 +85,14 @@ fn main() {
     let llvm_syslibs = llvm_config(&["--system-libs"]);
     let llvm_cxxflags = llvm_config(&["--cxxflags"]);
 
+    // main.rs links with the clang from this LLVM when it has one, so the
+    // IR and the clang that reads it are the same version
+    let clang = std::path::Path::new(&llvm_config(&["--bindir"]))
+        .join(if cfg!(windows) { "clang.exe" } else { "clang" });
+    if clang.exists() {
+        println!("cargo:rustc-env=CANTO_CLANG={}", clang.display());
+    }
+
     // C++ codegen
     let mut build = cc::Build::new();
     build

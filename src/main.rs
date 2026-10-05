@@ -92,7 +92,10 @@ fn build_executable(path: String, execute: bool) -> Result<(), Box<dyn Error>> {
     let mut engine = Engine::new(false);
     read_file(&mut engine, path, Path::new(&tmp_ll))?;
 
-    let status = process::Command::new("clang")
+    let clang = option_env!("CANTO_CLANG")
+        .filter(|p| Path::new(p).exists())
+        .unwrap_or("clang");
+    let status = process::Command::new(clang)
         .arg(&tmp_ll)
         .arg("-O2") // optimization
         .arg("-Wno-unused-command-line-argument") // Quiets unused args warning
