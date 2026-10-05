@@ -83,3 +83,25 @@ fn functions_mixed_return_test() {
     CantoTest::new("functions_mixed_return.ct")
         .assert_compile_error("returns must all have the same type");
 }
+
+#[test]
+fn init_test() {
+    // `canto init` writes a project whose main.ct runs as-is
+    let canto = env!("CARGO_BIN_EXE_canto");
+    let dir = std::env::temp_dir().join("canto_init_test");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let init = std::process::Command::new(canto).arg("init").arg(&dir).output().unwrap();
+    assert!(init.status.success(), "{}", String::from_utf8_lossy(&init.stderr));
+    assert!(dir.join("editor/write.ct").exists());
+
+    let run = std::process::Command::new(canto)
+        .args(["run", "main.ct"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "hello world");
+
+    let again = std::process::Command::new(canto).arg("init").arg(&dir).output().unwrap();
+    assert!(!again.status.success(), "init must not overwrite a project");
+}

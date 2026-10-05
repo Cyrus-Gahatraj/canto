@@ -2,6 +2,8 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
+#include<dirent.h>
+#include<sys/stat.h>
 
 #include "canto/compiler.h"
 #include "canto/ast.h"
@@ -53,23 +55,8 @@ static char* read_file(const char* path) {
     return buf;
 }
 
-// get utils → compiles <importer's dir>/utils.ct in place
-static bool load_module(Node* get, const char* importer, SymTable* syms) {
-    const Symbol* s = &syms->syms[get->get.lib_sym];
-    int dir_len = 0;
-    if (importer && s->start[0] != '/') {
-        const char* slash = strrchr(importer, '/');
-        if (slash) dir_len = (int)(slash - importer + 1);
-    }
-    bool has_ext = s->length >= 3 && memcmp(s->start + s->length - 3, ".ct", 3) == 0;
-    char path[PATH_MAX];
-    snprintf(path, sizeof path, "%.*s%.*s%s", dir_len, importer, (int)s->length, s->start, has_ext ? "" : ".ct");
-
-    char* real = realpath(path, NULL);
-    if (!real) {
-        fprintf(stderr, "Compiler Error: cannot find module '%s'\n", path);
-        return false;
-    }
+// Compiles one module file, unless it was already loaded. Takes `real`.
+static bool load_file(char* real, SymTable* syms) {
     for (uint32_t i = 0; i < loaded_count; i++) {
         if (strcmp(loaded_modules[i], real) == 0) { free(real); return true; }
     }
@@ -108,6 +95,52 @@ static bool load_module(Node* get, const char* importer, SymTable* syms) {
     diag_free(&diags);
 
     return ok && eval_stmts(tree, real, syms);
+}
+
+// get editor → every .ct file in the folder, in name order
+static bool load_dir(const char* dir, SymTable* syms) {
+    struct dirent** list;
+    int n = scandir(dir, &list, NULL, alphasort);
+    if (n < 0) return false;
+    bool ok = true;
+    for (int i = 0; i < n; i++) {
+        const char* name = list[i]->d_name;
+        size_t len = strlen(name);
+        if (ok && len > 3 && strcmp(name + len - 3, ".ct") == 0) {
+            char path[PATH_MAX];
+            snprintf(path, sizeof path, "%s/%s", dir, name);
+            char* real = realpath(path, NULL);
+            ok = real && load_file(real, syms);
+        }
+        free(list[i]);
+    }
+    free(list);
+    return ok;
+}
+
+// get utils → compiles <importer's dir>/utils.ct in place, or every .ct
+// file in <importer's dir>/utils/ when that's a folder
+static bool load_module(Node* get, const char* importer, SymTable* syms) {
+    const Symbol* s = &syms->syms[get->get.lib_sym];
+    int dir_len = 0;
+    if (importer && s->start[0] != '/') {
+        const char* slash = strrchr(importer, '/');
+        if (slash) dir_len = (int)(slash - importer + 1);
+    }
+    bool has_ext = s->length >= 3 && memcmp(s->start + s->length - 3, ".ct", 3) == 0;
+    char path[PATH_MAX];
+    snprintf(path, sizeof path, "%.*s%.*s%s", dir_len, importer, (int)s->length, s->start, has_ext ? "" : ".ct");
+
+    char* real = realpath(path, NULL);
+    if (real) return load_file(real, syms);
+
+    if (!has_ext) {
+        path[strlen(path) - 3] = '\0';  // drop ".ct"
+        struct stat st;
+        if (stat(path, &st) == 0 && S_ISDIR(st.st_mode)) return load_dir(path, syms);
+    }
+    fprintf(stderr, "Compiler Error: cannot find module '%s'\n", path);
+    return false;
 }
 
 static bool eval_stmts(Node* tree, const char* file_path, SymTable* syms) {

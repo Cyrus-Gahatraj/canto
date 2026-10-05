@@ -11,6 +11,7 @@ cargo test                       # integration tests, see "Tests" below
 cargo run -- run file.ct         # compile and run
 cargo run -- build file.ct       # binary written to ./build/<stem>
 cargo run                        # REPL
+cargo run -- init dir            # new project from templates/init/
 ```
 
 The linker prints `ld: warning: directory not found ... libiconv` under Nix on macOS. The warning is harmless.
@@ -32,7 +33,7 @@ main.rs (clap) → ffi::Engine → compile() [src/c/compiler.c]
 - **Codegen state is global.** `src/llvm/context.hpp` holds `TheContext`, `TheModule`, `Builder`, `NamedValues`, `LoopStack`, `KeywordModifiers`, `VariableElementTypes`, `IsRepl` and `WhenSubject`. `codegen_init()` resets all of them.
 - **Codegen return values:** gen functions return `nullptr` on error. `codegen_eval_expr` turns that into `-1`. A statement that produces no value returns a dummy `i32 0` constant rather than `nullptr`. A block stops at its first failing statement.
 - **Functions are compiled per call.** `gen_fn` only records the definition in `FnTemplates`. `gen_call` compiles one copy for each set of argument types, named like `add(i64,double)`, and annotated parameters (`x: double`) are coerced to their type. The return type comes from a `): type` annotation, or else from a throwaway "probe" compile that records the first `return`'s type (`ProbeReturns`). If the probe is part of mutual recursion, every function compiled during it is erased and rebuilt. `build_fn` saves and restores `NamedValues`, `VariableElementTypes`, `LoopStack` and `WhenSubject` around the body.
-- **Modules:** `get path` loads a Canto module. `get c:name { ... }` links C library `name` and declares its functions, and `get { ... }` or `get c: { ... }` means libc. Quotes around the path are optional. Without them `parse_get` takes the raw source text up to the first space, newline or `{` and interns it. The parser sets `get.is_canto` when the path lacks the `c:` prefix, and `gen_get` strips the prefix. Modules are resolved in `compiler.c`, not codegen. The path is relative to the importing file, and `.ct` is appended if missing. The module's statements are compiled into the same `main` at the import point. Every module shares the caller's `SymTable`, and `loaded_modules` (absolute paths, including the main file) makes each file load once. `gen_get` rejects a module `get` nested inside a block.
+- **Modules:** `get path` loads a Canto module. `get c:name { ... }` links C library `name` and declares its functions, and `get { ... }` or `get c: { ... }` means libc. Quotes around the path are optional. Without them `parse_get` takes the raw source text up to the first space, newline or `{` and interns it. The parser sets `get.is_canto` when the path lacks the `c:` prefix, and `gen_get` strips the prefix. Modules are resolved in `compiler.c`, not codegen. The path is relative to the importing file, and `.ct` is appended if missing. If there's no such file but there's a folder with that name, every `.ct` file in it loads in name order (`load_dir`). The module's statements are compiled into the same `main` at the import point. Every module shares the caller's `SymTable`, and `loaded_modules` (absolute paths, including the main file) makes each file load once. `gen_get` rejects a module `get` nested inside a block.
 - **REPL persistence:** variables live in a fixed `int64_t ReplStorage[65536]` indexed by symbol ID (`src/llvm/repl.cpp`). Doubles, bools and pointers are bitcast into those slots. Generated code calls `repl_set_type` to record each slot's type, and slot 0 (`REPL_RESULT_SLOT`) holds the last expression's value for printing.
 
 ## Where things live
@@ -46,6 +47,7 @@ main.rs (clap) → ffi::Engine → compile() [src/c/compiler.c]
 | Statement codegen | `stmt_gen` dispatch in `src/llvm/stmt_gen.cpp` (`let`/`edit` → `var_gen.cpp`, functions → `fn_gen.cpp`) |
 | Expression codegen | `expr_gen` in `src/llvm/expr_gen.cpp` |
 | Keyword modifier attributes (`write.edit { .end: "" }`) | `src/c/keywords/<kw>.c` (registered in `keyword_list.c`) or `local_registry` in `src/c/keyword_modifier.c` |
+| `canto init` project files | `templates/init/`. Each file is embedded with `include_str!` in the `INIT_FILES` list in `src/main.rs`, so a new template file has to be added there too. |
 | Editor highlighting | `tools/tree-sitter-canto/grammar.js` and `queries/highlights.scm`. The generated `src/parser.c` is committed, so regenerate it with `tree-sitter generate` after syntax changes. |
 
 **`build.rs` lists every C and C++ source file by hand.** When you add a `.c` file under `src/c/` or a `.cpp` file under `src/llvm/`, add it there too. Only `src/c/keywords/*.c` is picked up automatically.

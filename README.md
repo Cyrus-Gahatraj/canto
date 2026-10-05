@@ -188,7 +188,7 @@ By convention, a keyword variant has a PascalCase name so it stands out from ord
 
 ### Modules and C libraries: `get`
 
-`get` with a path pulls in another Canto file. The path needs no quotes (add them if it has spaces) and is relative to the importing file, and `.ct` is optional. The file's top-level code runs at the point of the `get`, and its functions and variables are visible after it. A file only loads once, so repeated or circular imports are safe.
+`get` with a path pulls in another Canto file. The path needs no quotes (add them if it has spaces) and is relative to the importing file, and `.ct` is optional. If the path is a folder, every `.ct` file in it loads, in name order. The file's top-level code runs at the point of the `get`, and its functions and variables are visible after it. A file only loads once, so repeated or circular imports are safe.
 
 ```
 get lib/mathx          ~ loads lib/mathx.ct
@@ -215,10 +215,24 @@ Modules share one namespace, so a name defined in two files clashes.
 ## Using the CLI
 
 ```sh
+canto init my-project         # start a project (or `canto init` for the current folder)
+canto update                  # rebuild canto from the latest source
 canto run path/to/file.ct     # compile to a native binary and run it
 canto build path/to/file.ct   # compile to ./build/<name>
 canto                         # start the interactive REPL (type `exit` to quit)
 ```
+
+`canto init` creates a project like this:
+
+```
+main.ct          get editor
+                 write "hello world"
+editor/
+  write.ct       write variants, like Writef (no newline)
+  types.ct       array types: Strings, Ints, Doubles, Bools
+```
+
+`get editor` loads the whole `editor` folder. Edit those files to reshape the keywords your project uses, or add new ones.
 
 Source files use the `.ct` extension. `build` and `run` generate LLVM IR, link it with `clang -O2`, and write the executable to `./build/`. The REPL instead compiles each line in memory with LLVM's ORC JIT, and your variables persist from one line to the next.
 

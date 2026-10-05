@@ -1,0 +1,7 @@
+~~
+    Variants of `write`. Edit these or add your own.
+
+    Writef "a"    writes without a newline
+~~
+
+let Writef write.edit { .end: "" }
